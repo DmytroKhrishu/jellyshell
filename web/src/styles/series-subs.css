@@ -1,0 +1,12 @@
+/* Series / season subtitle download: background progress pill (components/SeriesSubs.tsx). Not focusable, sits above
+   the toast so both can show; respects the TV-safe area. */
+.ssub-pill { position: fixed; right: var(--safe-x); bottom: calc(var(--safe-y) + 2.2rem); z-index: 55; display: flex; align-items: center; gap: 0.9rem;
+  padding: 0.8rem 1.3rem; border-radius: 1rem; background: var(--glass-strong); border: 1px solid var(--glass-border); backdrop-filter: blur(20px);
+  font-size: 1.1rem; font-weight: 600; font-variant-numeric: tabular-nums; pointer-events: none; animation: ssubIn var(--t-overlay, 350ms) var(--ease) both; }
+.ssub-sub { display: block; font-size: 0.9rem; font-weight: 500; color: var(--fg-muted); max-width: 22rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ssub-pill svg.ico.ssub-spin { width: 1.5rem; height: 1.5rem; color: var(--accent); animation: spin 1.1s linear infinite; }
+@keyframes ssubIn { from { opacity: 0; transform: translate3d(0, 0.8rem, 0); } }
+html.playing .ssub-pill, html.starting .ssub-pill { display: none; }
+html.mode-mobile .ssub-pill { right: 12px; bottom: calc(var(--tabbar-h) + var(--sb) + 70px); font-size: 14px; padding: 8px 12px; gap: 10px; }
+html.mode-mobile .ssub-sub { font-size: 12px; max-width: 60vw; }
+html.mode-mobile .ssub-pill svg.ico.ssub-spin { width: 18px; height: 18px; }

@@ -1,0 +1,47 @@
+/* JellyShell theme — every colour/timing lives here so it can be tuned in one place. */
+:root {
+  /* palette */
+  --bg: #07070b;
+  --bg-elev: rgba(28, 28, 36, 0.72);
+  --glass: rgba(30, 30, 40, 0.55);
+  --glass-strong: rgba(22, 22, 30, 0.82);
+  --glass-border: rgba(255, 255, 255, 0.10);
+  --fg: #f5f5f7;
+  --fg-dim: rgba(245, 245, 247, 0.72);
+  --fg-muted: rgba(245, 245, 247, 0.48);
+  --accent: #a78bfa;          /* violet, Jellyfin-adjacent */
+  --accent-2: #60a5fa;
+  --focus-ring: #ffffff;
+  --focus-fill: #f5f5f7;      /* button background when focused (inverted) */
+  --focus-fill-fg: #0b0b10;
+  --progress: #f5f5f7;
+  --progress-track: rgba(255, 255, 255, 0.25);
+  --danger: #f87171;
+  --ok: #34d399;
+  --skeleton: rgba(255, 255, 255, 0.06);
+  --skeleton-hi: rgba(255, 255, 255, 0.12);
+
+  /* geometry (1rem = 1920px/120 = 16px at 1080p, scales with viewport) */
+  --safe-x: 5rem;             /* ~5% TV-safe */
+  --safe-y: 2.6rem;
+  --radius-s: 0.6rem;
+  --radius-m: 1rem;
+  --radius-l: 1.4rem;
+  --card-gap: 1.6rem;
+  --poster-w: 12.5rem;
+  --thumb-w: 22rem;
+
+  /* motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast: 160ms;
+  --t-med: 240ms;
+  --t-slow: 900ms;
+  --t-xfade: 300ms;          /* backdrop crossfade */
+  --t-overlay: 350ms;        /* player overlay fade + slide */
+  --focus-scale: 1.07;
+
+  /* backdrop dim when browsing rows (hero shows it bright) */
+  --bg-dim: 0.35;
+
+  --font: "Inter Variable", "SF Pro Display", "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+}

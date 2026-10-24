@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.JellyShell" parent="@android:style/Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/bg</item>
+        <item name="android:colorAccent">#a78bfa</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+    <color name="bg">#07070b</color>
+</resources>

@@ -1,0 +1,7 @@
+/* Merged Store app: the "Media" side-switch pill at the end of the tab bar (same pill look, small icon + label). */
+.tab-side { display: inline-flex; align-items: center; gap: 0.55rem; margin-left: 0.5rem; position: relative; }
+.tab-side svg { opacity: 0.85; }
+.tab-side:focus svg { opacity: 1; }
+/* Thin divider: this pill leaves the dashboard instead of switching a tab. */
+.tab-side::before { content: ''; position: absolute; left: -0.5rem; top: 22%; bottom: 22%; width: 1px; background: var(--glass-border); pointer-events: none; }
+.tab-side:focus::before { opacity: 0; }

@@ -1,0 +1,16 @@
+{
+  "name": "JellyShell",
+  "short_name": "JellyShell",
+  "description": "Your Jellyfin library, made for the couch (and the phone).",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07070b",
+  "theme_color": "#07070b",
+  "icons": [
+    { "src": "icons/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-600.png", "sizes": "600x600", "type": "image/png", "purpose": "any" }
+  ]
+}

@@ -1,0 +1,16 @@
+# systemd --user unit for the JellyShell Dash backend (non-Docker install).
+#   cp dash/deploy/jellyshell-dash.service ~/.config/systemd/user/   (adjust the checkout path if it isn't ~/jellyshell)
+#   systemctl --user daemon-reload && systemctl --user enable --now jellyshell-dash
+# Configuration comes from the repo-root .env (or Environment= lines here); see docs/configuration.md.
+[Unit]
+Description=JellyShell Dash backend (dashboard web + API, :8098)
+After=network-online.target docker.service
+
+[Service]
+WorkingDirectory=%h/jellyshell/dash/server
+ExecStart=/usr/bin/python3 %h/jellyshell/dash/server/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

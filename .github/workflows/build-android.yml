@@ -1,0 +1,56 @@
+name: build-android
+
+# JellyShell Android APKs (android/): flavor tv (Android TV / Google TV) and mobile (phones/tablets). Signed with the stable release keystore from repo secrets
+# (ANDROID_KEYSTORE_B64 + ANDROID_KEYSTORE_PASSWORD, alias jellyshell), so every build installs over the last one; without them the APKs are debug-signed.
+# Optional configuration (docs/building.md):
+#   vars.JELLYSHELL_APP_ID          applicationId base (default app.jellyshell; the flavors append .tv / .mobile). Keep it stable, or installs stop updating.
+#   JELLYSHELL_DEFAULT_URL          page-server URL the app opens until the user sets one (secret or variable; unset = ask on first launch).
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/build-android.yml']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Keystore
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::No ANDROID_KEYSTORE_B64 secret: APK is debug-signed and won't update over a release build"
+          fi
+      - name: Build
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          JELLYSHELL_APP_ID: ${{ vars.JELLYSHELL_APP_ID }}
+          JELLYSHELL_DEFAULT_URL: ${{ secrets.JELLYSHELL_DEFAULT_URL || vars.JELLYSHELL_DEFAULT_URL }}
+          VERSION_OFFSET: ${{ vars.VERSION_OFFSET }}
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleTvRelease assembleMobileRelease
+          cp app/build/outputs/apk/tv/release/app-tv-release.apk "$GITHUB_WORKSPACE/jellyshell-tv.apk"
+          cp app/build/outputs/apk/mobile/release/app-mobile-release.apk "$GITHUB_WORKSPACE/jellyshell-android.apk"
+          "$ANDROID_HOME"/build-tools/*/apksigner verify --print-certs "$GITHUB_WORKSPACE/jellyshell-tv.apk" | head -3 || true
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 3
+          name: jellyshell-tv-apk
+          path: jellyshell-tv.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 3
+          name: jellyshell-android-apk
+          path: jellyshell-android.apk

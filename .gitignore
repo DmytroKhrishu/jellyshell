@@ -1,0 +1,24 @@
+bin/
+obj/
+*.pfx
+*.user
+.vs/
+.deploy/
+AppPackages/
+web-poc/client.log
+__pycache__/
+web-poc/snaps/
+web-poc/subs_created.json
+web-poc/apk/
+# local configuration (copy .env.example); never commit
+docker-compose.override.yml
+compose.override.yaml
+.env
+.env.*
+!.env.example
+# node_modules as dir or symlink
+node_modules
+web/dist/
+dash/web/dist/
+# page-server / dash runtime files (JELLYSHELL_DATA_DIR / DASH_DATA_DIR defaults)
+data/

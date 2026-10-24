@@ -1,0 +1,13 @@
+/* Merged Store app: the side-switch pill at the end of the tab bar, and the bundled first-run server screen. */
+.tab-side { margin-left: 0.5rem; position: relative; }
+/* Thin divider: the pill leaves the app instead of switching a tab. */
+.tab-side::before {
+  content: ''; position: absolute; left: -0.5rem; top: 22%; bottom: 22%; width: 1px;
+  background: var(--glass-border); pointer-events: none;
+}
+.tab-side:focus::before { opacity: 0; }
+
+.srv-setup h2 { display: flex; align-items: center; gap: 0.7rem; font-size: 2rem; font-weight: 700; margin: 0; }
+.srv-setup h2 .ico { color: var(--accent); }
+.srv-setup-hint { font-size: 1.2rem; color: var(--fg-dim); margin: 0 0 0.4rem; line-height: 1.45; }
+.srv-setup .btn { justify-content: center; }

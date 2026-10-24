@@ -1,0 +1,21 @@
+/* "Are you still watching?" (components/StillWatching.tsx): full-screen, calm fade + slide, TV-safe insets. */
+.sw-wrap { position: absolute; inset: 0; z-index: 40; display: flex; align-items: flex-end; background: #07070b; animation: swIn var(--t-overlay) var(--ease) both; }
+.sw-bd { position: absolute; inset: 0; opacity: 0.45; }
+.sw-bd img { width: 100%; height: 100%; object-fit: cover; }
+.sw-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(7, 7, 11, 0.92) 0%, rgba(7, 7, 11, 0.7) 45%, rgba(7, 7, 11, 0.2) 100%), linear-gradient(0deg, rgba(7, 7, 11, 0.85) 0%, rgba(7, 7, 11, 0) 50%); }
+.sw-body { position: relative; max-width: 56rem; padding: 0 var(--safe-x) calc(var(--safe-y) + 6rem); display: flex; flex-direction: column; align-items: flex-start; animation: swUp var(--t-overlay) var(--ease) both; }
+.sw-kicker { font-size: 1.15rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--fg-muted); margin-bottom: 0.8rem; }
+.sw-title { font-size: 3.6rem; font-weight: 700; line-height: 1.1; margin: 0 0 1rem; }
+.sw-sub { font-size: 1.4rem; color: var(--fg-dim); margin-bottom: 0.4rem; }
+.sw-note { font-size: 1.1rem; color: var(--fg-muted); margin-bottom: 2.4rem; }
+.sw-btn { font-size: 1.3rem; }
+@keyframes swIn { from { opacity: 0; } }
+@keyframes swUp { from { opacity: 0; transform: translate3d(0, 1.6rem, 0); } }
+.reduce-motion .sw-wrap, .reduce-motion .sw-body { animation-duration: 1ms; }
+
+html.mode-mobile .sw-body { padding: 0 max(20px, env(safe-area-inset-left)) calc(max(24px, env(safe-area-inset-bottom)) + 24px); max-width: none; }
+html.mode-mobile .sw-title { font-size: clamp(26px, 7vw, 40px); }
+html.mode-mobile .sw-kicker { font-size: 13px; }
+html.mode-mobile .sw-sub { font-size: 15px; }
+html.mode-mobile .sw-note { font-size: 13px; margin-bottom: 22px; }
+html.mode-mobile .sw-btn { font-size: 16px; height: 48px; padding: 0 22px; border-radius: 12px; background: var(--fg); color: #0b0b10; } /* no focus ring on touch: always filled, like hero Play */

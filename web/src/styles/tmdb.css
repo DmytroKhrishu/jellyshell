@@ -1,0 +1,46 @@
+/* Release dates, request options dialog, full TMDB page. Uses only theme.css variables. */
+
+/* "coming" pill on discover/search posters */
+.rq-coming { position: absolute; left: 0.6rem; bottom: 0.6rem; display: inline-flex; align-items: center; gap: 0.35rem; max-width: calc(100% - 1.2rem); padding: 0.25rem 0.7rem; border-radius: 999px; font-size: 0.95rem; font-weight: 800; white-space: nowrap; overflow: hidden; color: #0b0b10; background: rgba(245, 245, 247, 0.92); box-shadow: 0 0.2rem 0.8rem rgba(0, 0, 0, 0.5); animation: fadeIn var(--t-med) var(--ease); }
+.rq-coming .ico { width: 1em; height: 1em; flex: none; }
+
+/* dates list (sheet + page) */
+.rq-dates { display: grid; grid-template-columns: max-content max-content minmax(0, 1fr); gap: 0.35rem 1.4rem; align-items: baseline; margin: 0.2rem 0 1.3rem; font-size: 1.1rem; animation: fadeIn var(--t-med) var(--ease); }
+.rq-date { display: contents; }
+.rq-date-l { color: var(--fg-muted); font-weight: 600; }
+.rq-date-v { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+.rq-date.coming .rq-date-v { color: var(--accent); }
+.rq-date-v .ico { width: 1em; height: 1em; }
+.rq-date-s { color: var(--fg-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* request options (inside the confirm dialog) */
+.rq-confirm.with-opts { max-width: 76rem; }
+.rq-opts { display: flex; flex-direction: column; gap: 1rem; padding: 0.4rem 0.8rem 0.2rem; }
+.rq-opt-l { font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--fg-muted); margin-bottom: 0.5rem; }
+.rq-opt-pills { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+.rq-opt-pills .pill { display: inline-flex; align-items: center; gap: 0.4rem; }
+.rq-def { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; margin-left: 0.3rem; }
+
+/* full TMDB page */
+.tm-head { min-height: 58vh; }
+.tm-tagline { font-size: 1.3rem; font-style: italic; color: var(--fg-dim); margin: -0.4rem 0 0.9rem; }
+.tm-head .rq-dates { max-width: 60rem; }
+.tm-seasons .card-text.tm-season-text { display: block; }
+.tm-season-st { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.95rem; font-weight: 700; margin-top: 0.2rem; color: var(--fg-dim); }
+.tm-season-st .ico { width: 1em; height: 1em; }
+.tm-season-st.available { color: var(--ok); }
+.tm-season-st.partial { color: var(--accent-2); }
+.tm-season-st.processing, .tm-season-st.pending { color: var(--accent); }
+
+/* phones */
+html.mode-mobile .rq-dates { font-size: 13px; gap: 4px 12px; grid-template-columns: max-content minmax(0, 1fr); }
+html.mode-mobile .rq-date-s { grid-column: 2; margin-top: -3px; font-size: 12px; }
+html.mode-mobile .rq-coming { font-size: 11px; left: 4px; bottom: 4px; padding: 2px 6px; }
+html.mode-mobile .rq-opts { padding: 4px 0 0; }
+html.mode-mobile .rq-opt-l { font-size: 11px; }
+html.mode-mobile .rq-opt-pills .pill { font-size: 14px; padding: 8px 12px; }
+html.mode-mobile .rq-confirm.with-opts { max-height: 86svh; overflow-y: auto; }
+html.mode-mobile .tm-head { min-height: 0; padding-top: 30svh; }
+html.mode-mobile .tm-tagline { font-size: 14px; }
+html.mode-mobile .tm-head .btn-row > .btn { flex: 1 1 auto; justify-content: center; }
+html.mode-mobile .tm-season-st { font-size: 12px; }

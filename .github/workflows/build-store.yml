@@ -1,0 +1,156 @@
+name: build-store
+
+# Microsoft Store build of the merged JellyShell app (docs/store-release.md).
+# Produces:
+#   jellyshell-store-upload    -> JellyShell_1.0.N.0_x64.msixupload (StoreUpload, unsigned; Partner Center signs it)
+#   jellyshell-store-test-x64  -> the SAME identity as a sideloadable .msix, signed with a test cert whose subject equals
+#                                 the Store publisher CN, so it can be checked on the Dev Mode console before uploading:
+#                                 python3 tools/deploy.py --run-id N --artifact jellyshell-store-test-x64 --launch
+on:
+  workflow_dispatch:
+
+# Store identity comes from repository VARIABLES (Settings > Secrets and variables > Actions > Variables), copied from
+# Partner Center > your app > Product management > Product identity (docs/store-release.md):
+#   STORE_NAME               Package/Identity/Name             (e.g. Contoso.JellyShell)
+#   STORE_PUBLISHER          Package/Identity/Publisher        (CN=XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)
+#   STORE_PUBLISHER_DISPLAY  Package/Properties/PublisherDisplayName
+#   STORE_PHONE_PRODUCT_ID   any stable GUID for mp:PhoneIdentity (generate once, never change it)
+#   STORE_DISPLAY            optional, display name (default JellyShell)
+env:
+  STORE_NAME: ${{ vars.STORE_NAME }}
+  STORE_PUBLISHER: ${{ vars.STORE_PUBLISHER }}
+  STORE_PUBLISHER_DISPLAY: ${{ vars.STORE_PUBLISHER_DISPLAY }}
+  STORE_DISPLAY: ${{ vars.STORE_DISPLAY || 'JellyShell' }}
+  STORE_PHONE_PRODUCT_ID: ${{ vars.STORE_PHONE_PRODUCT_ID }}
+  # Optional build-time page-server defaults (same as build.yml); unset = the Store app starts on its bundled UI.
+  JELLYSHELL_MEDIA_URL: ${{ secrets.JELLYSHELL_MEDIA_URL || vars.JELLYSHELL_MEDIA_URL }}
+  JELLYSHELL_DASH_URL: ${{ secrets.JELLYSHELL_DASH_URL || vars.JELLYSHELL_DASH_URL }}
+  JELLYSHELL_PUBLIC_URL: ${{ secrets.JELLYSHELL_PUBLIC_URL || vars.JELLYSHELL_PUBLIC_URL }}
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Check Store identity variables
+        shell: pwsh
+        run: |
+          $missing = @('STORE_NAME', 'STORE_PUBLISHER', 'STORE_PUBLISHER_DISPLAY', 'STORE_PHONE_PRODUCT_ID') | Where-Object { -not [Environment]::GetEnvironmentVariable($_) }
+          if ($missing) {
+            echo "::error::Set these repository variables (Settings > Secrets and variables > Actions > Variables) from Partner Center > Product identity: $($missing -join ', '). See docs/store-release.md."
+            exit 1
+          }
+          if ($env:STORE_PUBLISHER -notmatch '^CN=') { echo "::error::STORE_PUBLISHER must look like CN=XXXXXXXX-XXXX-... (Partner Center Package/Identity/Publisher)"; exit 1 }
+          [guid]::Parse($env:STORE_PHONE_PRODUCT_ID) | Out-Null
+
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web/dist and bundle it as the offline UI (shell/XboxShell/ui)
+        shell: pwsh
+        run: |
+          Push-Location web; npm ci; if ($LASTEXITCODE) { exit 1 }; npm run build; if ($LASTEXITCODE) { exit 1 }; Pop-Location
+          New-Item -ItemType Directory -Force shell\XboxShell\ui | Out-Null
+          Copy-Item web\dist\* shell\XboxShell\ui -Recurse -Force
+          Get-ChildItem shell\XboxShell\ui -Recurse -Filter *.map | Remove-Item
+          if (!(Test-Path shell\XboxShell\ui\index.html)) { throw "no bundled index.html" }
+          Get-ChildItem shell\XboxShell\ui -Recurse | Measure-Object -Property Length -Sum | % { "bundled ui: $($_.Count) files, $([int]($_.Sum/1KB)) KB" }
+
+      - name: Store identity + version 1.0.<run_number + VERSION_OFFSET>.0
+        shell: pwsh
+        env:
+          VERSION_OFFSET: ${{ vars.VERSION_OFFSET }}
+        run: |
+          $v = "1.0.$([int]'${{ github.run_number }}' + [int]('0' + $env:VERSION_OFFSET)).0"
+          $m = "shell\XboxShell\Package.appxmanifest"
+          [xml]$x = Get-Content $m -Raw
+          $ns = New-Object Xml.XmlNamespaceManager $x.NameTable
+          $ns.AddNamespace("f", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+          $ns.AddNamespace("uap", "http://schemas.microsoft.com/appx/manifest/uap/windows10")
+          $ns.AddNamespace("mp", "http://schemas.microsoft.com/appx/2014/phone/manifest")
+          $id = $x.SelectSingleNode("/f:Package/f:Identity", $ns)
+          $id.SetAttribute("Name", $env:STORE_NAME)
+          $id.SetAttribute("Publisher", $env:STORE_PUBLISHER)
+          $id.SetAttribute("Version", $v)
+          $x.SelectSingleNode("/f:Package/mp:PhoneIdentity", $ns).SetAttribute("PhoneProductId", $env:STORE_PHONE_PRODUCT_ID)
+          $x.SelectSingleNode("/f:Package/f:Properties/f:DisplayName", $ns).InnerText = $env:STORE_DISPLAY
+          $x.SelectSingleNode("/f:Package/f:Properties/f:PublisherDisplayName", $ns).InnerText = $env:STORE_PUBLISHER_DISPLAY
+          $x.SelectSingleNode("//uap:VisualElements", $ns).SetAttribute("DisplayName", $env:STORE_DISPLAY)
+          $x.Save((Resolve-Path $m))
+          Get-Content $m | Select-String -Pattern 'Identity|DisplayName|Description|TargetDeviceFamily|PhoneIdentity'
+
+      - name: Restore
+        run: msbuild shell\XboxShell\XboxShell.csproj /t:Restore /p:Configuration=Release /p:Platform=x64
+
+      - name: Build .msixupload (StoreUpload, unsigned)
+        run: >
+          msbuild shell\XboxShell\XboxShell.csproj /m
+          /p:Configuration=Release /p:Platform=x64
+          /p:AppxBundle=Always /p:AppxBundlePlatforms=x64
+          /p:ExtraDefines="VSTORE" /p:ExtraDefines2="V"
+          /p:UapAppxPackageBuildMode=StoreUpload
+          /p:AppxPackageSigningEnabled=false
+          /p:GenerateTestArtifacts=false
+          /p:AppxPackageDir=${{ github.workspace }}\upload\
+          /v:minimal
+
+      - name: Test cert with subject = Store publisher (stable secret if set, else generated here)
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.STORE_TEST_PFX_B64 }}
+          PFX_PW: ${{ secrets.STORE_TEST_PFX_PASSWORD }}
+        run: |
+          $f = "shell\XboxShell\StoreTest.pfx"
+          if ($env:PFX_B64) {
+            [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String($env:PFX_B64)); $pwText = $env:PFX_PW; "using STORE_TEST_PFX_B64"
+          } else {
+            $pwText = [guid]::NewGuid().ToString()
+            $c = New-SelfSignedCertificate -Type Custom -Subject $env:STORE_PUBLISHER -KeyUsage DigitalSignature -FriendlyName "JellyShell store test" -CertStoreLocation Cert:\CurrentUser\My -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+            Export-PfxCertificate -Cert $c -FilePath $f -Password (ConvertTo-SecureString $pwText -Force -AsPlainText) | Out-Null
+            "generated a per-run test cert (install with deploy.py --reinstall)"
+          }
+          $pw = ConvertTo-SecureString -String $pwText -Force -AsPlainText
+          $c = Import-PfxCertificate -FilePath $f -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          if ($c.Subject -ne $env:STORE_PUBLISHER) { throw "test cert subject $($c.Subject) != $env:STORE_PUBLISHER" }
+          echo "::add-mask::$pwText"
+          echo "TEST_PW=$pwText" >> $env:GITHUB_ENV
+          echo "TEST_THUMB=$($c.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Build sideload test .msix (same identity, test-signed)
+        run: >
+          msbuild shell\XboxShell\XboxShell.csproj /m
+          /p:Configuration=Release /p:Platform=x64
+          /p:AppxBundle=Never
+          /p:ExtraDefines="VSTORE" /p:ExtraDefines2="V"
+          /p:UapAppxPackageBuildMode=SideloadOnly
+          /p:AppxPackageDir=${{ github.workspace }}\test\
+          /p:PackageCertificateKeyFile=StoreTest.pfx
+          /p:PackageCertificatePassword=${{ env.TEST_PW }}
+          /p:PackageCertificateThumbprint=${{ env.TEST_THUMB }}
+          /v:minimal
+
+      - name: List outputs
+        shell: pwsh
+        run: Get-ChildItem upload, test -Recurse -Include *.msixupload, *.msix, *.msixbundle, *.appx | % { "$($_.FullName) $([int]($_.Length/1KB)) KB" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 3
+          name: jellyshell-store-upload
+          path: upload/**/*.msixupload
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 3
+          name: jellyshell-store-test-x64
+          path: |
+            test/**/*.msix
+            test/**/*.appx
+          if-no-files-found: error

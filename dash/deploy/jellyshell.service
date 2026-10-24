@@ -1,0 +1,16 @@
+# systemd --user unit for the JellyShell page server (non-Docker install).
+#   cp dash/deploy/jellyshell.service ~/.config/systemd/user/   (adjust the checkout path if it isn't ~/jellyshell)
+#   systemctl --user daemon-reload && systemctl --user enable --now jellyshell
+# Configuration comes from the repo-root .env (or Environment= lines here); see docs/configuration.md.
+[Unit]
+Description=JellyShell page server (:8097)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/jellyshell/web-poc
+ExecStart=/usr/bin/python3 %h/jellyshell/web-poc/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,49 @@
+/* ---------- subtitle finder (side panel) ---------- */
+.sf-wrap { position: fixed; inset: 0; z-index: 45; background: linear-gradient(90deg, rgba(0,0,0,0.15) 30%, rgba(0,0,0,0.6) 100%); animation: fadeIn var(--t-overlay) ease both; }
+.sf { position: absolute; top: 0; right: 0; bottom: 0; width: 50rem; padding: calc(var(--safe-y) + 0.6rem) var(--safe-x) var(--safe-y) 2.4rem; display: flex; flex-direction: column;
+  background: rgba(16, 16, 22, 0.94); border-left: 1px solid var(--glass-border); backdrop-filter: blur(30px); animation: sfIn var(--t-overlay) var(--ease) both; }
+@keyframes sfIn { from { transform: translate3d(3rem, 0, 0); opacity: 0; } }
+.sf-head { margin-bottom: 1.1rem; }
+.sf-title { font-size: 0.95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--fg-muted); }
+.sf-item-name { font-size: 1.6rem; font-weight: 800; margin-top: 0.3rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sf-file { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; font-size: 1rem; color: var(--fg-muted); margin-top: 0.6rem; }
+.sf-tag { padding: 0.12rem 0.55rem; border-radius: 0.4rem; background: rgba(255, 255, 255, 0.1); color: var(--fg-dim); font-weight: 600; }
+.sf-langs { display: flex; gap: 0.6rem; margin-bottom: 1rem; flex: none; }
+.sf-count { margin-left: 0.55rem; font-weight: 500; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.sf-state { flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 0.5rem; padding-bottom: 6rem; }
+.sf-state .spinner { width: 2.6rem; height: 2.6rem; border-width: 0.25rem; margin-bottom: 0.8rem; }
+.sf-state-main { font-size: 1.35rem; font-weight: 700; }
+.sf-state-sub { font-size: 1.05rem; color: var(--fg-muted); max-width: 40rem; }
+.sf-list { position: relative; flex: 1; overflow: hidden; margin: 0 -1rem; padding: 0 1rem; }
+.sf-item { padding: 0.9rem 1.1rem; border-radius: 0.9rem; margin-bottom: 0.4rem; transition: background-color var(--t-fast), transform var(--t-fast) var(--ease); }
+.sf-item.match:not(:focus) { background: rgba(52, 211, 153, 0.1); box-shadow: inset 0.25rem 0 0 var(--ok); }
+.sf-item:focus { background: var(--focus-fill); color: var(--focus-fill-fg); transform: scale(1.02); }
+.sf-row1 { display: flex; align-items: baseline; gap: 0.7rem; }
+.sf-rel { font-size: 1.15rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sf-more { font-size: 0.9rem; color: var(--fg-muted); flex: none; }
+.sf-score { margin-left: auto; flex: none; font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--fg-dim); }
+.sf-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 0.45rem; margin-top: 0.35rem; font-size: 0.92rem; color: var(--fg-muted); }
+.sf-prov { margin-right: 0.3rem; }
+.sf-badge { padding: 0.08rem 0.5rem; border-radius: 0.4rem; background: rgba(255, 255, 255, 0.1); color: var(--fg-dim); font-weight: 600; font-size: 0.82rem; letter-spacing: 0.02em; }
+.sf-badge.good { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
+.sf-badge.dim { background: transparent; border: 1px solid var(--glass-border); }
+.sf-item:focus .sf-more, .sf-item:focus .sf-score, .sf-item:focus .sf-row2 { color: #555; }
+.sf-item:focus .sf-badge { background: rgba(0, 0, 0, 0.08); color: #333; }
+.sf-item:focus .sf-badge.good { background: rgba(5, 150, 105, 0.16); color: #047857; }
+.sf-dl { display: inline-flex; align-items: center; gap: 0.45rem; margin-left: auto; font-weight: 600; }
+.sf-dl .spinner { width: 1rem; height: 1rem; border-width: 0.15rem; }
+.sf-item:focus .sf-dl .spinner { border-color: rgba(0, 0, 0, 0.15); border-top-color: #0b0b10; }
+.sf-foot { flex: none; font-size: 0.92rem; color: var(--fg-muted); padding-top: 0.8rem; }
+
+/* picker action rows ("Find subtitles…", "Fix timing") */
+.opt.act .lbl { color: var(--fg); font-weight: 600; }
+.opt.act .dot { opacity: 0; }
+.opt.act:focus .lbl { color: inherit; }
+.act-rule { margin-top: 0.4rem; }
+.opt .sub.busy::before { content: ''; display: inline-block; vertical-align: -0.12rem; width: 0.9rem; height: 0.9rem; margin-right: 0.5rem; border: 0.14rem solid rgba(255, 255, 255, 0.25); border-top-color: currentColor; border-radius: 50%; animation: spin 0.9s linear infinite; }
+
+/* player: long subtitle job in progress */
+.p-task { position: absolute; top: calc(var(--safe-y) + 5.4rem); left: 50%; transform: translateX(-50%); z-index: 25; display: flex; align-items: center; gap: 0.8rem; padding: 0.8rem 1.4rem; border-radius: 999px; background: var(--glass-strong); border: 1px solid var(--glass-border); backdrop-filter: blur(20px); font-size: 1.1rem; font-weight: 600; animation: fadeIn var(--t-overlay) ease both; }
+.p-task .spinner { width: 1.1rem; height: 1.1rem; border-width: 0.16rem; }
+.sf-confirm { margin-left: auto; font-weight: 700; color: #fbbf24; }
+.sf-item:focus .sf-confirm { color: #b45309; }

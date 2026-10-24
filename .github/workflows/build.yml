@@ -1,0 +1,126 @@
+name: build-shell
+
+on:
+  push:
+    paths: ['shell/**', '.github/workflows/build.yml']
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      defines:
+        description: extra C# defines (e.g. BISECT)
+        default: ''
+      variants:
+        description: JSON list of variant defines, each built as its own package
+        default: '[""]'
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    strategy:
+      matrix:
+        variant: ${{ fromJSON(inputs.variants || '[""]') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Build web/dist and bundle it as the offline UI (shell/XboxShell/ui)
+        shell: pwsh
+        run: |
+          Push-Location web; npm ci; if ($LASTEXITCODE) { exit 1 }; npm run build; if ($LASTEXITCODE) { exit 1 }; Pop-Location
+          New-Item -ItemType Directory -Force shell\XboxShell\ui | Out-Null
+          Copy-Item web\dist\* shell\XboxShell\ui -Recurse -Force
+          Get-ChildItem shell\XboxShell\ui -Recurse -Filter *.map | Remove-Item
+          if (!(Test-Path shell\XboxShell\ui\index.html)) { throw "no bundled index.html" }
+          Get-ChildItem shell\XboxShell\ui -Recurse | Measure-Object -Property Length -Sum | % { "bundled ui: $($_.Count) files, $([int]($_.Sum/1KB)) KB" }
+
+      - name: Signing cert from secret (stable key, so updates install over the old build)
+        shell: pwsh
+        env:
+          PFX_B64: ${{ secrets.SIGNING_PFX_B64 }}
+          PFX_PW: ${{ secrets.SIGNING_PFX_PASSWORD }}
+        run: |
+          $f = "shell\XboxShell\JellyShell.pfx"
+          $m = "shell\XboxShell\Package.appxmanifest"
+          $publisher = ([xml](Get-Content $m -Raw)).Package.Identity.Publisher
+          if ($env:PFX_B64) {
+            [IO.File]::WriteAllBytes($f, [Convert]::FromBase64String($env:PFX_B64)); $pwText = $env:PFX_PW
+          } else {
+            # No secret (fresh fork): a throwaway cert for this run only. Installs work, but the next build can't update it
+            # in place (different key): deploy with "uninstall first". Set SIGNING_PFX_B64/PASSWORD for stable updates.
+            echo "::warning::No SIGNING_PFX_B64 secret: signing with a per-run self-signed cert ($publisher). See docs/building.md."
+            $pwText = [guid]::NewGuid().ToString()
+            $c = New-SelfSignedCertificate -Type Custom -Subject $publisher -KeyUsage DigitalSignature -FriendlyName "JellyShell per-run" -CertStoreLocation Cert:\CurrentUser\My -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
+            Export-PfxCertificate -Cert $c -FilePath $f -Password (ConvertTo-SecureString $pwText -Force -AsPlainText) | Out-Null
+          }
+          $pw = ConvertTo-SecureString -String $pwText -Force -AsPlainText
+          $c = Import-PfxCertificate -FilePath $f -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          if ($c.Subject -ne $publisher) { throw "signing cert subject '$($c.Subject)' != manifest Publisher '$publisher' (docs/building.md)" }
+          echo "::add-mask::$pwText"
+          echo "PFX_PW=$pwText" >> $env:GITHUB_ENV
+          echo "THUMB=$($c.Thumbprint)" >> $env:GITHUB_ENV
+
+      - name: Stamp version 0.1.<run_number>.0 + sideload identity
+        shell: pwsh
+        env:
+          # Repo variables (optional). SIDELOAD_IDENTITY: package Identity Name, default from the manifest (JellyShell.Sideload).
+          # Set it to the Name of an existing install to keep upgrading that install in place (docs/building.md).
+          SIDELOAD_IDENTITY: ${{ vars.SIDELOAD_IDENTITY }}
+          SIDELOAD_PHONE_PRODUCT_ID: ${{ vars.SIDELOAD_PHONE_PRODUCT_ID }}
+          # VERSION_OFFSET (optional, default 0) is added to the run number, so a moved/re-created repo keeps versions above existing installs.
+          VERSION_OFFSET: ${{ vars.VERSION_OFFSET }}
+        run: |
+          $v = "0.1.$([int]'${{ github.run_number }}' + [int]('0' + $env:VERSION_OFFSET)).0"
+          $m = "shell\XboxShell\Package.appxmanifest"
+          [xml]$x = Get-Content $m -Raw
+          $ns = New-Object Xml.XmlNamespaceManager $x.NameTable
+          $ns.AddNamespace("f", "http://schemas.microsoft.com/appx/manifest/foundation/windows10")
+          $ns.AddNamespace("mp", "http://schemas.microsoft.com/appx/2014/phone/manifest")
+          $id = $x.SelectSingleNode("/f:Package/f:Identity", $ns)
+          $phone = $x.SelectSingleNode("/f:Package/mp:PhoneIdentity", $ns)
+          $name = if ($env:SIDELOAD_IDENTITY) { $env:SIDELOAD_IDENTITY } else { $id.GetAttribute("Name") }
+          if ($name -notmatch '^[A-Za-z0-9.-]{3,50}$') { throw "SIDELOAD_IDENTITY '$name' is not a valid package name (3-50 of A-Z a-z 0-9 . -)" }
+          if ($env:SIDELOAD_PHONE_PRODUCT_ID) { $phone.SetAttribute("PhoneProductId", $env:SIDELOAD_PHONE_PRODUCT_ID) }
+          # Variant builds (bisect matrix) install side by side: own Name + own PhoneProductId.
+          if ("${{ matrix.variant }}" -ne "") { $name += "${{ matrix.variant }}"; $phone.SetAttribute("PhoneProductId", [guid]::NewGuid().ToString()) }
+          $id.SetAttribute("Name", $name)
+          $id.SetAttribute("Version", $v)
+          $x.Save((Resolve-Path $m))
+          Select-String -Path $m -Pattern 'Identity'
+
+      - name: Restore
+        run: msbuild shell\XboxShell\XboxShell.csproj /t:Restore /p:Configuration=Release /p:Platform=x64
+
+      - name: Build appx
+        env:
+          # Optional build-time page-server defaults (UiSource.cs → generated BuildDefaults). Secrets win over variables; unset = empty,
+          # and the app starts on its bundled UI and asks for the server address.
+          JELLYSHELL_MEDIA_URL: ${{ secrets.JELLYSHELL_MEDIA_URL || vars.JELLYSHELL_MEDIA_URL }}
+          JELLYSHELL_DASH_URL: ${{ secrets.JELLYSHELL_DASH_URL || vars.JELLYSHELL_DASH_URL }}
+          JELLYSHELL_PUBLIC_URL: ${{ secrets.JELLYSHELL_PUBLIC_URL || vars.JELLYSHELL_PUBLIC_URL }}
+        run: >
+          msbuild shell\XboxShell\XboxShell.csproj /m
+          /p:Configuration=Release /p:Platform=x64
+          /p:AppxBundle=Never
+          /p:ExtraDefines="V${{ matrix.variant }}" /p:ExtraDefines2="V${{ inputs.defines }}"
+          /p:UapAppxPackageBuildMode=SideloadOnly
+          /p:AppxPackageDir=${{ github.workspace }}\out\
+          /p:PackageCertificateKeyFile=JellyShell.pfx
+          /p:PackageCertificatePassword=${{ env.PFX_PW }}
+          /p:PackageCertificateThumbprint=${{ env.THUMB }}
+          /v:minimal
+
+      - uses: actions/upload-artifact@v4
+        with:
+          retention-days: 3
+          name: jellyshell-x64${{ matrix.variant }}
+          path: |
+            out/**/*.msix
+            out/**/*.appx
+          if-no-files-found: error

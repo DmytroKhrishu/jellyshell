@@ -1,0 +1,78 @@
+# JellyShell server stack. Quick start:
+#   cp .env.example .env    # optional: Jellyfin on this Docker host at :8096 is the default; every integration is optional
+#   docker compose up -d --build                 # page server on :8097
+#   docker compose --profile dash up -d --build  # + TV dashboard on :8098 (+ now-playing sidecar)
+# All configuration is in .env; see docs/configuration.md and docs/docker.md.
+
+services:
+  jellyshell:
+    build: { context: ., target: jellyshell }
+    image: jellyshell:latest
+    container_name: jellyshell
+    restart: unless-stopped
+    env_file: [{ path: .env, required: false }]  # Compose >= 2.24
+    ports:
+      # Host port from JELLYSHELL_HOST_PORT in .env (default 8097); the container side follows JELLYSHELL_PORT.
+      - "${JELLYSHELL_HOST_PORT:-8097}:${JELLYSHELL_PORT:-8097}"
+      # Optional hardened public listener (reverse proxy / Tailscale Funnel / Cloudflare Tunnel): set
+      # JELLYSHELL_PUBLIC_PORT=8093 in .env and publish it from docker-compose.override.yml (gitignored, see docs/docker.md).
+    volumes:
+      - jellyshell-data:/data
+      # Optional: let it read API keys from your *arr config dirs (set ARR_CONFIG_DIR=/arr in .env).
+      # Layout expected: /arr/seerr/config/settings.json, /arr/sonarr/config/config.xml, /arr/radarr/..., /arr/bazarr/config/config/config.yaml
+      # - /path/to/your/arr/stack:/arr:ro
+      # Optional: subtitle backups / cut checks need the media files Bazarr sees as /media (MEDIA_PATH_MAP=/media=/media).
+      # - /path/to/your/media:/media
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Jellyfin / *arr apps published on the Docker host
+    # To talk to Jellyfin / the *arr apps by service name instead, join their compose network and use
+    # JELLYFIN_URL=http://jellyfin:8096, SEERR_URL=http://seerr:5055, ... in .env:
+    # networks: [default, media]
+
+  dash:
+    profiles: [dash]
+    build: { context: ., target: dash }
+    image: jellyshell-dash:latest
+    container_name: jellyshell-dash
+    restart: unless-stopped
+    env_file: [{ path: .env, required: false }]  # Compose >= 2.24
+    ports:
+      - "${DASH_HOST_PORT:-8098}:${DASH_PORT:-8098}"
+    volumes:
+      - dash-data:/data
+      # Server tab: CPU, RAM, temperature and uptime are already the host's. The network card shows the container's
+      # eth0 and the hostname is the container id; for the host's interface use network_mode: host (then drop `ports:`,
+      # set DASH_BIND / DASH_PORT, DASH_NET_IF=eth0-name and DASH_HOSTNAME in .env).
+      # Containers list: read-only Docker socket (optional; grants read access to all container metadata). The image runs
+      # as uid 10001, so it also needs the socket's group (group_add below, the gid from `stat -c %g /var/run/docker.sock`),
+      # and per-container CPU/RAM needs the host cgroup tree (cgroup: host).
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+      # Disk usage for DASH_DISKS="System=/;Media=/media": mount the paths read-only.
+      # - /path/to/your/media:/media:ro
+    # group_add: ["989"]   # gid of /var/run/docker.sock, for the containers list
+    # cgroup: host          # per-container CPU/RAM in the containers list
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  nowplaying:
+    profiles: [dash]
+    build: { context: ., target: nowplaying }
+    image: jellyshell-nowplaying:latest
+    container_name: jellyshell-nowplaying
+    restart: unless-stopped
+    env_file: [{ path: .env, required: false }]  # Compose >= 2.24
+    # pyatv finds the HomePod / Apple TV by multicast (mDNS) on your LAN, which needs the host network.
+    # The dash finds it at http://nowplaying:8102 by default; with host networking set NP_URL=http://host.docker.internal:8102.
+    # network_mode: host
+    # Without NP_DEVICE_ID the sidecar exits with a message; leave it out of `--profile dash` by scaling it to 0:
+    #   docker compose --profile dash up -d --scale nowplaying=0
+
+volumes:
+  jellyshell-data:
+  dash-data:
+
+# Existing Jellyfin / *arr compose network (find it with `docker network ls`), used by `networks: [default, media]` above:
+# networks:
+#   media:
+#     external: true
+#     name: media_default

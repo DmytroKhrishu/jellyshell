@@ -1,0 +1,10 @@
+<Page
+    x:Class="XboxShell.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="Black">
+    <Grid x:Name="Root">
+        <TextBlock x:Name="Diag" Canvas.ZIndex="99" Margin="96,54" FontSize="22" Foreground="Yellow" Text="NATIVE PAGE RENDERED" IsHitTestVisible="False" Visibility="Collapsed" />
+        <!-- WebView2 is created in code: created in XAML it refuses to take focus on Xbox. -->
+    </Grid>
+</Page>

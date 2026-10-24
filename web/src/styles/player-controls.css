@@ -1,0 +1,11 @@
+/* Player bottom bar: round controls, icon-only Audio & Subtitles / Episodes, subtitles-on indicator. */
+.p-controls .btn { border-radius: 999px; }
+.p-controls .btn.p-tracks { position: relative; }
+.p-controls .sub-dot {
+  position: absolute; top: 0.55rem; right: 0.55rem; width: 0.6rem; height: 0.6rem; border-radius: 50%;
+  background: var(--accent); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.45);
+}
+.p-controls .btn.subs-on svg.ico { color: var(--accent); }
+.p-controls .btn.subs-on:focus svg.ico { color: #6d28d9; }
+.p-controls .btn.subs-on:focus .sub-dot { background: #6d28d9; box-shadow: none; }
+html.mode-mobile .p-controls .sub-dot { top: 6px; right: 6px; width: 7px; height: 7px; }

@@ -1,0 +1,11 @@
+node_modules/
+web/dist/
+server/state/
+server/client.log
+server/server.out
+__pycache__/
+.venv-atv/
+
+# runtime / local-only
+*.log
+docs/shots/

@@ -1,0 +1,26 @@
+# Keep the build context small and free of local config / secrets.
+.git
+.github
+**/node_modules
+**/dist
+**/__pycache__
+.env
+.env.*
+!.env.example
+.deploy
+data
+shell
+android
+docs
+tools
+*.md
+!web/**/*.md
+web-poc/client.log
+web-poc/subs_created.json
+web-poc/snaps
+web-poc/apk
+dash/server/state
+dash/server/client.log
+dash/.venv-atv
+dash/mac-agent
+dash/docs

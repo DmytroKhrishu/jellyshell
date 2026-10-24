@@ -1,0 +1,15 @@
+# Optional systemd --user unit for the HomePod / Apple TV now-playing sidecar (needs NP_DEVICE_ID in .env).
+#   python3 -m venv ~/jellyshell/dash/.venv-atv && ~/jellyshell/dash/.venv-atv/bin/pip install -r ~/jellyshell/dash/server/requirements-nowplaying.txt
+#   cp dash/deploy/jellyshell-dash-nowplaying.service ~/.config/systemd/user/ && systemctl --user enable --now jellyshell-dash-nowplaying
+[Unit]
+Description=JellyShell Dash now-playing sidecar (pyatv, 127.0.0.1:8102)
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/jellyshell/dash/server
+ExecStart=%h/jellyshell/dash/.venv-atv/bin/python %h/jellyshell/dash/server/nowplaying.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

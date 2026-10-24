@@ -1,0 +1,74 @@
+/* Downloads → Calendar sub-tab (pages/DownloadsCalendar.tsx) + the Queue/Calendar sub-tab pills. Theme variables only. */
+
+/* ---------- sub-tab pills in the Downloads header ---------- */
+.dl-subtabs { display: flex; gap: 0.7rem; }
+.dl-subtabs .pill { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.dl-subtabs .pill .ico { font-size: 0.95em; }
+.dl-subtabs .pill.selected:not(:focus) { box-shadow: inset 0 0 0 0.12rem rgba(255, 255, 255, 0.28); }
+
+/* ---------- agenda ---------- */
+.cal-list { max-width: 96rem; margin: 0 auto 3rem; animation: cal-in 350ms var(--ease) both; }
+@keyframes cal-in { from { opacity: 0; transform: translateY(0.8rem); } to { opacity: 1; transform: none; } }
+
+.cal-day { margin-bottom: 1.6rem; }
+.cal-dayhead { display: flex; align-items: baseline; gap: 1rem; font-size: 1.45rem; font-weight: 700; margin: 1.6rem 0 1rem; padding-left: 0.4rem; }
+.cal-day:first-child .cal-dayhead { margin-top: 0; }
+.cal-date { font-size: 1.1rem; font-weight: 600; color: var(--fg-dim); }
+.cal-n { font-size: 1rem; font-weight: 600; color: var(--fg-muted); margin-left: auto; padding-right: 0.4rem; }
+.cal-day.today .cal-rel { color: var(--accent); }
+.cal-day.today .cal-dayhead::before { content: ''; align-self: center; width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--accent); }
+.cal-day.past .cal-rel { color: var(--fg-dim); }
+.cal-none { font-size: 1.1rem; padding: 0.2rem 0.4rem 0.6rem; }
+
+.cal-row {
+  display: flex; align-items: center; gap: 1.3rem; padding: 0.8rem 1.2rem; margin-bottom: 0.7rem; border-radius: var(--radius-m);
+  background: rgba(255, 255, 255, 0.06);
+  transition: transform var(--t-fast) var(--ease), background-color var(--t-fast), box-shadow var(--t-fast);
+}
+.cal-row:focus { transform: scale(1.02); background: rgba(255, 255, 255, 0.16); box-shadow: inset 0 0 0 0.18rem var(--focus-ring), 0 1rem 2.6rem rgba(0, 0, 0, 0.45); }
+.cal-row.linked { cursor: pointer; }
+.cal-day.past .cal-row:not(:focus) { opacity: 0.72; }
+.cal-row.sk { background: var(--skeleton); }
+.cal-poster { width: 3.4rem; }
+.cal-main { flex: 1; min-width: 0; }
+.cal-title { font-size: 1.3rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-sub { font-size: 1.05rem; color: var(--fg-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.2rem; }
+
+.cal-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 0.45rem; }
+.cal-when { display: flex; align-items: center; gap: 0.8rem; }
+.cal-kind { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; font-weight: 700; padding: 0.2rem 0.7rem; border-radius: 999px; background: rgba(255, 255, 255, 0.1); color: var(--fg); }
+.cal-kind.k-cinema { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
+.cal-kind.k-digital { background: rgba(96, 165, 250, 0.2); color: var(--accent-2); }
+.cal-kind.k-physical { background: rgba(167, 139, 250, 0.22); color: var(--accent); }
+.cal-time { font-size: 1.1rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.cal-state { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.95rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-dim); }
+.cal-state.have { color: var(--ok); }
+.cal-state.part { color: var(--accent-2); }
+.cal-state.miss { color: #fbbf24; }
+.dl-chev.ghost { width: 2.1rem; }
+
+/* ---------- phone ---------- */
+html.mode-mobile .dl-subtabs { width: 100%; }
+html.mode-mobile .dl-subtabs .pill { flex: 1; justify-content: center; }
+html.mode-mobile .cal-list { max-width: none; }
+html.mode-mobile .cal-dayhead { font-size: 17px; margin: 1.2rem 0 0.6rem; }
+html.mode-mobile .cal-date { font-size: 13px; }
+html.mode-mobile .cal-n { font-size: 12px; }
+html.mode-mobile .cal-row { padding: 8px 10px; gap: 10px; border-radius: 14px; margin-bottom: 6px; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+html.mode-mobile .cal-row > * { min-width: 0; }
+html.mode-mobile .cal-poster { width: 2.9rem; }
+html.mode-mobile .cal-title { font-size: 15px; }
+html.mode-mobile .cal-sub { font-size: 12.5px; }
+/* Phone: badges + state go under the subtitle so the title keeps the full width. */
+html.mode-mobile .cal-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: 'p m c' 'p s c'; column-gap: 10px; row-gap: 5px; }
+html.mode-mobile .cal-poster { grid-area: p; align-self: center; }
+html.mode-mobile .cal-main { grid-area: m; align-self: end; }
+html.mode-mobile .cal-side { grid-area: s; flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; gap: 4px 10px; align-self: start; }
+html.mode-mobile .cal-row .dl-chev { grid-area: c; align-self: center; font-size: 22px; }
+html.mode-mobile .cal-when { gap: 6px; }
+html.mode-mobile .cal-kind { font-size: 11px; padding: 2px 7px; }
+html.mode-mobile .cal-time { font-size: 13px; }
+html.mode-mobile .cal-state { font-size: 10.5px; letter-spacing: 0.04em; }
+html.mode-mobile .dl-chev.ghost { display: none; }
+html.mode-mobile.touch .cal-row:focus { transform: none; }
+html.mode-mobile .cal-row:active { transform: scale(0.97); }

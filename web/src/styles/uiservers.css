@@ -1,0 +1,13 @@
+/* Settings → JellyShell server editor (components/UiServerDialog.tsx) + the optional page-server field in ServerSetup. */
+.uis-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); animation: fadeIn var(--t-fast) var(--ease); }
+.uis { width: min(60rem, calc(100vw - 2 * var(--safe-x))); animation: popIn var(--t-med) var(--ease); box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.55); }
+.uis h2 { display: flex; align-items: center; gap: 0.7rem; font-size: 2rem; font-weight: 700; margin: 0; }
+.uis h2 .ico { color: var(--accent); }
+.uis-hint { font-size: 1.15rem; color: var(--fg-dim); margin: 0 0 0.4rem; line-height: 1.5; }
+.uis-btns { display: flex; gap: 1rem; }
+.uis-btns .btn { flex: 1; justify-content: center; gap: 0.6rem; }
+.srv-setup-opt { font-size: 1.05rem; color: var(--fg-muted); margin: 0.6rem 0 -0.4rem; line-height: 1.45; }
+html.mode-mobile .uis-wrap { align-items: flex-end; }
+html.mode-mobile .uis { width: 100%; border-radius: 2rem 2rem 0 0; padding: 2rem 1.6rem calc(2rem + env(safe-area-inset-bottom)); }
+.srv-setup .field input::placeholder, .uis .field input::placeholder { color: var(--fg-muted); opacity: 1; }
+.srv-setup .field:focus input::placeholder, .uis .field:focus input::placeholder { color: #666; }
