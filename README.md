@@ -111,6 +111,15 @@ Alternatively, mount your *arr config folders read-only and set `ARR_CONFIG_DIR`
 
 Full reference: [configuration](docs/configuration.md) · [Docker](docs/docker.md) · [public access](docs/public-access.md)
 
+### Using different services
+
+The integrations are the ones the author runs (Seerr, Sonarr/Radarr, qBittorrent, Bazarr, Immich, Apple Home via a Mac
+agent, a HomePod). Anything you don't use can stay unset and its feature hides itself. To plug in something else
+(Transmission, Home Assistant, Google Calendar, PhotoPrism, Sonos, ...), see
+**[docs/integrations.md](docs/integrations.md)**. It lists, per feature, the one server function to replace and the
+JSON shape the UI expects. Calendar and Home take plain JSON pushes, so any script can feed them. The page is written
+so you can also hand it to an AI coding agent: "make the Dash use Home Assistant, following docs/integrations.md".
+
 ## Clients
 
 ### Xbox (Dev Mode sideload)

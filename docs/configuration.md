@@ -12,6 +12,9 @@ three programs at a different file.
 
 Empty means "unset" everywhere.
 
+Using a different service than the ones below (another download client, smart-home hub, photo library, calendar)?
+See [integrations.md](integrations.md).
+
 ## Page server (`web-poc/server.py`)
 
 | Variable | Default | What it does |
