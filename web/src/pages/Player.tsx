@@ -34,6 +34,7 @@ import { stillWatching } from '../lib/idle';
 import { useAutoSkip } from '../components/AutoSkip';
 import { NextCard, nextAutoplayMode, nextLabel, useNextCountdown } from '../components/NextCountdown';
 import { nextTiming, noteFinished, segEnd } from '../lib/introskip';
+import { nowPlaying } from '../lib/remote';
 
 const HIDE_MS = 8000;
 const WAKE_HINT_MS = 4000;
@@ -957,6 +958,13 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   const loading = !err && (state === 'Opening' || state === 'Buffering' || !sess);
   const title = it ? (it.Type === 'Episode' ? it.SeriesName : it.Name) : '';
   const subtitle = it?.Type === 'Episode' ? `${episodeLabel(it)} · ${it.Name}` : it?.ProductionYear ? String(it.ProductionYear) : '';
+  // Phone remote: its play/pause button and "now playing" line (lib/remote.ts).
+  const ppRef = useRef(togglePause);
+  ppRef.current = () => (togglePause(), showUi());
+  useEffect(() => {
+    nowPlaying.value = it ? { title: title || '', sub: subtitle, paused: state === 'Paused', toggle: () => ppRef.current() } : null;
+  }, [it, title, subtitle, state === 'Paused']);
+  useEffect(() => () => void (nowPlaying.value = null), []);
   const vInfo = sess?.source.MediaStreams.find((m) => m.Type === 'Video');
   const aInfo = sess?.source.MediaStreams.find((m) => m.Index === sess.audioIndex && m.Type === 'Audio');
   const transcodeReasons = sess?.source.TranscodingUrl && sess.playMethod !== 'DirectPlay' ? decodeURIComponent(/TranscodeReasons=([^&]+)/.exec(sess.source.TranscodingUrl)?.[1] ?? '').replace(/,/g, ', ') : '';

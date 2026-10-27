@@ -84,6 +84,7 @@ const REPEAT_MS = 110;
 document.addEventListener(
   'keydown',
   (e) => {
+    if ((e as any).jsRemote) return; // phone remote's synthetic Enter on a text field (lib/remote.ts): the field handles it
     const active = document.activeElement;
     let action: Action | undefined = XBOX[e.keyCode];
     if (isTextInput(active)) {
@@ -220,6 +221,36 @@ if (!isNative) {
       dispatch('back', 'key');
     }
   });
+}
+
+// ---------- phone remote (lib/remote.ts): press / hold / release from another device ----------
+// 'tap' = press + release. 'down' starts OS-style repeats after 400 ms until 'up' (or a 10 s safety stop: a phone that
+// went to sleep mid-hold must not scroll the TV forever).
+const held = new Map<Action, { timer: number; t0: number }>();
+export function injectPress(a: Action, phase: 'down' | 'up' | 'tap') {
+  const h = held.get(a);
+  if (phase === 'up' && !h) return; // stray release (already stopped)
+  if (h) {
+    window.clearInterval(h.timer);
+    held.delete(a);
+    if (phase === 'down') {
+      downAt.delete(a);
+      for (const r of releaseHandlers) r(a);
+    }
+  }
+  if (phase === 'down' || phase === 'tap') dispatch(a, 'remote');
+  if (phase === 'down') {
+    const t0 = performance.now();
+    const timer = window.setInterval(() => {
+      const ms = performance.now() - t0;
+      if (ms > 10_000) return injectPress(a, 'up');
+      if (ms > 400) dispatch(a, 'remote', true);
+    }, REPEAT_MS);
+    held.set(a, { timer, t0 });
+    return;
+  }
+  downAt.delete(a);
+  for (const r of releaseHandlers) r(a);
 }
 
 // ---------- remote debug hook: POST /api/cmd {"key":199} | {"keys":[204,204,195]} | {"action":"select"} ----------

@@ -22,6 +22,7 @@ import access  # per-user capabilities + public-listener guards
 import arr_proxy  # Seerr / *arr proxy (keys stay server-side)
 import subs_proxy  # Bazarr subtitle tools (keys stay server-side)
 import picture_proxy  # HDR->SDR tone-mapping brightness/contrast (Jellyfin encoding config)
+import remote_relay  # phone remote: pairing + input relay (docs/remote.md)
 
 ROOT = Path(__file__).resolve().parent
 APKS = {'/tv.apk': 'jellyshell-tv.apk', '/jellyshell-tv.apk': 'jellyshell-tv.apk',
@@ -101,9 +102,12 @@ class H(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.split('?', 1)[0]
-        if (arr_proxy.handle(self, 'GET') or subs_proxy.handle(self, 'GET') or picture_proxy.handle(self, 'GET')):
+        if (arr_proxy.handle(self, 'GET') or subs_proxy.handle(self, 'GET') or picture_proxy.handle(self, 'GET')
+                or remote_relay.handle(self, 'GET')):
             return
-        if path in ('/privacy', '/privacy/', '/privacy.html'):  # privacy policy (static, both listeners)
+        if path in ('/remote', '/remote.html') and config.REMOTE:  # phone remote page (web/remote.html)
+            self._static('/remote.html')
+        elif path in ('/privacy', '/privacy/', '/privacy.html'):  # privacy policy (static, both listeners)
             self._send(200, privacy_page(), 'text/html; charset=utf-8')
         elif path in ('/install', '/install/') and config.STORE_PRODUCT_ID:  # Xbox Edge -> Microsoft Store listing
             pid = urllib.parse.quote(config.STORE_PRODUCT_ID, safe='')
@@ -163,11 +167,12 @@ class H(BaseHTTPRequestHandler):
         return body
 
     def do_DELETE(self):
-        if not (arr_proxy.handle(self, 'DELETE') or subs_proxy.handle(self, 'DELETE')):
+        if not (arr_proxy.handle(self, 'DELETE') or subs_proxy.handle(self, 'DELETE') or remote_relay.handle(self, 'DELETE')):
             self._send(404, b'', 'text/plain')
 
     def do_POST(self):
-        if (arr_proxy.handle(self, 'POST') or subs_proxy.handle(self, 'POST') or picture_proxy.handle(self, 'POST')):
+        if (arr_proxy.handle(self, 'POST') or subs_proxy.handle(self, 'POST') or picture_proxy.handle(self, 'POST')
+                or remote_relay.handle(self, 'POST')):
             return
         if self.path.startswith('/snap') and self._debug():
             n = int(self.headers.get('Content-Length', 0))
@@ -221,7 +226,9 @@ class PublicH(H):
         """Rate limit + body cap + prefix strip. Returns the normalized path or None (response already sent)."""
         ip = self._ip()
         log_path = self.path.startswith(('/log', self.PREFIX + '/log'))
-        if not access.GENERAL.allow(ip) or (method in ('POST', 'DELETE') and not log_path and not access.WRITES.allow(ip)):
+        # The phone remote has its own per-IP limits (remote_relay.TRAFFIC / PAIR): a D-pad is a burst of small POSTs.
+        own_limits = self.path.startswith(('/api/remote/', self.PREFIX + '/api/remote/'))
+        if not access.GENERAL.allow(ip) or (method in ('POST', 'DELETE') and not log_path and not own_limits and not access.WRITES.allow(ip)):
             self._send(429, b'{"error":"slow down"}', 'application/json')
             return None
         try:
@@ -273,7 +280,8 @@ class PublicH(H):
                 _append_log(self._ip(), '\n'.join(f'[public] {ln[:2000]}' for ln in line.split('\n')[:20]))
             self._send(204, b'', 'text/plain')
             return
-        if not (arr_proxy.handle(self, 'POST') or subs_proxy.handle(self, 'POST') or picture_proxy.handle(self, 'POST')):
+        if not (arr_proxy.handle(self, 'POST') or subs_proxy.handle(self, 'POST') or picture_proxy.handle(self, 'POST')
+                or remote_relay.handle(self, 'POST')):
             self._send(404, b'', 'text/plain')
 
     def do_PUT(self):

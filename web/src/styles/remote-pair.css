@@ -1,0 +1,35 @@
+/* Settings → Phone remote pairing dialog (components/RemoteDialog.tsx). */
+.rp-wrap { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.72); animation: fadeIn var(--t-fast) var(--ease); }
+.rp.login-panel { background: rgb(20, 20, 28); width: min(72rem, calc(100vw - 2 * var(--safe-x))); max-height: calc(100vh - 2 * var(--safe-y)); animation: popIn var(--t-med) var(--ease); box-shadow: 0 2rem 6rem rgba(0, 0, 0, 0.55); }
+.rp h2 { display: flex; align-items: center; gap: 0.7rem; font-size: 2rem; font-weight: 700; margin: 0; }
+.rp h2 .ico { color: var(--accent); }
+.rp-body { display: flex; gap: 3rem; align-items: stretch; }
+.rp-qr { flex: none; width: 22rem; height: 22rem; background: #fff; border-radius: 1.2rem; padding: 0.4rem; }
+.rp-qr svg { display: block; width: 100%; height: 100%; }
+.rp-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.rp-hint { font-size: 1.4rem; color: var(--fg-dim); margin: 0; line-height: 1.4; }
+.rp-url { font-size: 1.6rem; font-weight: 600; color: var(--fg); word-break: break-all; }
+.rp-code { font-size: 4.6rem; font-weight: 700; letter-spacing: 0.12em; font-variant-numeric: tabular-nums; line-height: 1.1; margin: 0.4rem 0 0; }
+.rp-code.wait { color: var(--fg-muted); }
+.rp-ttl { font-size: 1.25rem; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+.rp-ok { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 1.2rem; font-weight: 600; color: var(--ok); animation: fadeIn var(--t-med) var(--ease); }
+.rp-tip { font-size: 1.2rem; color: var(--fg-dim); margin: auto 0 0; padding-top: 1rem; line-height: 1.45; }
+.rp-list h3 { font-size: 0.95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.14em; color: var(--fg-muted); margin: 0.4rem 0 0.5rem 0.4rem; }
+.rp-row { display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1.1rem; border-radius: 0.8rem; font-size: 1.2rem; transition: background-color var(--t-fast), color var(--t-fast); }
+.rp-row .rp-name { font-weight: 600; }
+.rp-row .rp-seen { flex: 1; color: var(--fg-muted); font-size: 1.05rem; }
+.rp-row .rp-act { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--fg-muted); opacity: 0; transition: opacity var(--t-fast); }
+.rp-row:focus { background: var(--focus-fill); color: var(--focus-fill-fg); }
+.rp-row:focus .rp-seen, .rp-row:focus .rp-act { color: rgba(11, 11, 16, 0.65); opacity: 1; }
+.rp-btns { margin-top: 1.2rem; }
+.rp-btns .btn { gap: 0.6rem; }
+
+html.mode-mobile .rp-wrap { align-items: flex-end; }
+html.mode-mobile .rp { width: 100%; border-radius: 2rem 2rem 0 0; padding: 2rem 1.6rem calc(2rem + env(safe-area-inset-bottom)); overflow-y: auto; }
+html.mode-mobile .rp h2 { font-size: 20px; }
+html.mode-mobile .rp-body { flex-direction: column; align-items: stretch; gap: 14px; }
+html.mode-mobile .rp-qr { width: 150px; height: 150px; align-self: center; }
+html.mode-mobile .rp-hint, html.mode-mobile .rp-row { font-size: 15px; }
+html.mode-mobile .rp-code { font-size: 40px; text-align: center; }
+html.mode-mobile .rp-ttl, html.mode-mobile .rp-tip, html.mode-mobile .rp-row .rp-seen { font-size: 13px; }
+html.mode-mobile .rp-row .rp-act { opacity: 1; }

@@ -39,6 +39,8 @@ with HDMI mode and frame-rate switching.
   segments) with a next-episode countdown, "Are you still watching?", per-series audio/subtitle memory, audio boost and
   night mode.
 - **Browsing**: Home rows, Movies and Shows libraries with sort and filters, search, cast and person pages, release dates.
+- **Phone remote**: pair a phone with a 6-digit code (or QR) and get a full-screen remote page: swipe pad or D-pad, the
+  Xbox buttons, play/pause, and typing into the TV's search and text fields. Works as a Home Screen web app.
 - **Optional integrations** (each turns itself off when not configured):
   - **Seerr / Jellyseerr / Overseerr**: request movies and shows, "My Requests", TMDB pages for titles you don't have yet.
   - **Sonarr / Radarr / qBittorrent**: a read-only Downloads queue with live speed and ETA, plus a release calendar (admins).
@@ -155,6 +157,22 @@ Signing, app ids and installing with `adb`: [docs/building.md](docs/building.md#
 
 Any modern browser can open `http://<server-ip>:8097` directly (desktop and phone layouts). Direct play depends on what
 the browser can decode; Jellyfin transcodes the rest.
+
+### Phone remote
+
+A faster replacement for the Xbox app's remote, served by the JellyShell server at `http://<server-ip>:8097/remote`
+(also on the public listener).
+
+1. On the TV: **Settings → Remote → Phone remote**. It shows a QR code and a 6-digit code (valid 10 minutes).
+2. On the phone: scan the QR code, or open `/remote` and type the code. The phone is now paired with *that* TV (the
+   pairing belongs to the device, not the Jellyfin account), and stays paired until you remove it on either side.
+3. iPhone: Share → **Add to Home Screen** for a full-screen app. The pairing carries over.
+
+The page fits one screen and never scrolls, so swipes only drive the TV. It has a swipe pad (swipe to move, tap for A,
+hold for the context menu) or a D-pad, LB/RB/LT/RT, A/B/X/Y, View/Menu, play/pause, and a keyboard that types into the
+TV's search or any focused text field. Input goes through a long-poll relay in the page server (a few ms on the LAN, no
+cloud round trip). Needs a JellyShell server: the bundled Store build without one hides it. Details:
+[docs/remote.md](docs/remote.md).
 
 ## Development
 
