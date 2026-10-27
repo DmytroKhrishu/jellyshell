@@ -2,6 +2,7 @@
 // The token lives in localStorage AND a cookie: iOS copies Safari's cookies (not its localStorage) into a Home Screen
 // web app when it is created, so pairing in Safari and then "Add to Home Screen" keeps the pairing.
 import { signal } from '@preact/signals';
+import type { PlayerOp, PlayerState } from '../lib/remote';
 
 const TOKEN_KEY = 'jsr.token';
 const HOST_KEY = 'jsr.host';
@@ -9,7 +10,7 @@ const COOKIE = 'jsr_token';
 
 export interface TvState {
   text: { label: string; value: string; secret: boolean } | null;
-  player: { title: string; sub?: string; paused: boolean } | null;
+  player: PlayerState | null;
 }
 
 function readCookie() {
@@ -26,6 +27,10 @@ export const token = signal<string>(localStorage.getItem(TOKEN_KEY) || readCooki
 export const hostName = signal<string>(localStorage.getItem(HOST_KEY) || 'TV');
 export const online = signal<boolean | null>(null);
 export const tv = signal<TvState | null>(null);
+/** performance.now() when `tv` last arrived: the Now Playing panel interpolates the position from there. */
+export const tvAt = signal(0);
+/** Lock screen controls are on: keep watching the TV while the page is hidden (the silent audio keeps the page alive). */
+export const keepAwake = signal(false);
 export const netError = signal(false);
 
 if (token.value && !localStorage.getItem(TOKEN_KEY)) localStorage.setItem(TOKEN_KEY, token.value);
@@ -78,7 +83,7 @@ export async function unpairSelf() {
 }
 
 // ---------------- sending: one request in flight, everything queued meanwhile goes in the next batch (keeps order) ----------------
-type Cmd = { a: string; t: 'tap' | 'down' | 'up' } | { text: string } | { key: 'enter' | 'clear' } | { playpause: true };
+type Cmd = { a: string; t: 'tap' | 'down' | 'up' } | { text: string } | { key: 'enter' | 'clear' } | { playpause: true } | { player: PlayerOp };
 let queue: Cmd[] = [];
 let inFlight = false;
 
@@ -86,6 +91,9 @@ export function send(c: Cmd) {
   if (!token.value) return;
   // Typing sends the whole field value: only the newest one matters.
   if ('text' in c) queue = queue.filter((q) => !('text' in q));
+  // Seeks (seek bar drag) and boost / picture picks: the newest one wins too (brightness and contrast separately).
+  const k = (o: PlayerOp) => o.op + (o.op === 'pic' ? ('b' in o ? 'b' : 'c') : '');
+  if ('player' in c && ['seek', 'boost', 'pic'].includes(c.player.op)) queue = queue.filter((q) => !('player' in q && k(q.player) === k(c.player)));
   queue.push(c);
   void flush();
 }
@@ -115,7 +123,7 @@ export function startWatch() {
     let v = 0;
     let fails = 0;
     while (token.value) {
-      if (document.hidden) {
+      if (document.hidden && !keepAwake.value) {
         await new Promise((r) => document.addEventListener('visibilitychange', r, { once: true }));
         v = 0; // re-read the state right away after the phone wakes up
         continue;
@@ -127,6 +135,7 @@ export function startWatch() {
         netError.value = false;
         online.value = r.online;
         tv.value = r.state;
+        tvAt.value = performance.now();
         if (r.name && r.name !== hostName.value) {
           hostName.value = r.name;
           localStorage.setItem(HOST_KEY, r.name);

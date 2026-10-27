@@ -26,7 +26,7 @@ import { MobilePlayerLayer, toggleFullscreen } from '../components/MobilePlayer'
 import { uiMode, isAndroidTV } from '../lib/mode';
 import { Icon } from '../components/icons';
 import { picture, loadPicture } from '../lib/picture';
-import { openPictureDialog } from '../components/PictureDialog';
+import { applyPicture, openPictureDialog } from '../components/PictureDialog';
 import { settings } from '../lib/settings';
 import { audioBoost, BOOST_STEPS, boostAck, boostAvailable, boostLabel, setBoost } from '../lib/audioboost';
 import { useStillWatching } from '../components/StillWatching';
@@ -34,7 +34,7 @@ import { stillWatching } from '../lib/idle';
 import { useAutoSkip } from '../components/AutoSkip';
 import { NextCard, nextAutoplayMode, nextLabel, useNextCountdown } from '../components/NextCountdown';
 import { nextTiming, noteFinished, segEnd } from '../lib/introskip';
-import { nowPlaying } from '../lib/remote';
+import { useRemotePlayer } from '../components/RemotePlayer';
 
 const HIDE_MS = 8000;
 const WAKE_HINT_MS = 4000;
@@ -749,15 +749,16 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   }, []);
   const srcRange = sess?.source.MediaStreams.find((m) => m.Type === 'Video')?.VideoRangeType;
   const toneMapped = !!sess && settings.value.hdr === 'off' && !!srcRange && srcRange !== 'SDR' && sess.playMethod !== 'DirectPlay';
+  const restartForPicture = () => {
+    // Jellyfin reads the values when a transcode starts: restart the stream at the current position.
+    const s = r.current.sess;
+    if (!s || !it) return;
+    reportStopped(s, r.current.pos);
+    start(it, r.current.pos, s.audioIndex, s.subIndex);
+  };
   const openPicture = () => {
     showUi();
-    openPictureDialog(() => {
-      // Jellyfin reads the values when a transcode starts: restart the stream at the current position.
-      const s = r.current.sess;
-      if (!s || !it) return;
-      reportStopped(s, r.current.pos);
-      start(it, r.current.pos, s.audioIndex, s.subIndex);
-    });
+    openPictureDialog(restartForPicture);
   };
   const centerIcon: 'pause' | 'play' | null = state === 'Paused' ? 'pause' : osd === '@play' ? 'play' : null;
   const lastCenter = useRef<'pause' | 'play'>('pause');
@@ -958,13 +959,13 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   const loading = !err && (state === 'Opening' || state === 'Buffering' || !sess);
   const title = it ? (it.Type === 'Episode' ? it.SeriesName : it.Name) : '';
   const subtitle = it?.Type === 'Episode' ? `${episodeLabel(it)} · ${it.Name}` : it?.ProductionYear ? String(it.ProductionYear) : '';
-  // Phone remote: its play/pause button and "now playing" line (lib/remote.ts).
-  const ppRef = useRef(togglePause);
-  ppRef.current = () => (togglePause(), showUi());
-  useEffect(() => {
-    nowPlaying.value = it ? { title: title || '', sub: subtitle, paused: state === 'Paused', toggle: () => ppRef.current() } : null;
-  }, [it, title, subtitle, state === 'Paused']);
-  useEffect(() => () => void (nowPlaying.value = null), []);
+  // Phone remote: Now playing panel + lock screen (components/RemotePlayer.ts runs these same handlers).
+  useRemotePlayer({
+    it, title: title || '', subtitle, paused: state === 'Paused', buffering: loading, pos: () => r.current.pos, dur, audios, subs,
+    audioIndex: sess?.audioIndex ?? -1, subIndex: sess?.subIndex ?? -1, subOff, pictureOk: toneMapped && !!picture.value?.canEdit,
+    next, seg: activeSeg?.Type ?? null, skipMs: 10_000, togglePause, seekTo, flash, setAudio, setSub, nudge,
+    applyPicture: (v) => (showUi(), applyPicture(v, restartForPicture)), playNext, switchEpisode, skipSeg, showUi: () => showUi(),
+  });
   const vInfo = sess?.source.MediaStreams.find((m) => m.Type === 'Video');
   const aInfo = sess?.source.MediaStreams.find((m) => m.Index === sess.audioIndex && m.Type === 'Audio');
   const transcodeReasons = sess?.source.TranscodingUrl && sess.playMethod !== 'DirectPlay' ? decodeURIComponent(/TranscodeReasons=([^&]+)/.exec(sess.source.TranscodingUrl)?.[1] ?? '').replace(/,/g, ', ') : '';

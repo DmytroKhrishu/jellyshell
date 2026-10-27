@@ -2,17 +2,22 @@
 import { openPicker, dialog } from './Dialog';
 import { picture, setPicture, BRIGHTNESS, CONTRAST, brightnessLabel, contrastLabel } from '../lib/picture';
 
+/** Apply a new value (dialog pick or the phone remote): onChanged runs after the server accepted it (the player restarts
+ *  its stream there). An open picture dialog is rebuilt so its tick follows the value. */
+export async function applyPicture(v: { brightness?: number; contrast?: number }, onChanged?: () => void) {
+  const req = setPicture(v); // optimistic: picture.value already holds the new value
+  if (dialog.value) openPictureDialog(onChanged); // rebuild so the tick follows the new value
+  const ok = await req;
+  if (!ok && dialog.value) openPictureDialog(onChanged); // reverted
+  if (ok) onChanged?.();
+  return ok;
+}
+
 /** onChanged runs after the server accepted a new value (the player restarts its stream there). */
 export function openPictureDialog(onChanged?: () => void) {
   const p = picture.value;
   if (!p) return;
-  const pick = async (v: { brightness?: number; contrast?: number }) => {
-    const req = setPicture(v); // optimistic: picture.value already holds the new value
-    if (dialog.value) openPictureDialog(onChanged); // rebuild so the tick follows the new value
-    const ok = await req;
-    if (!ok && dialog.value) openPictureDialog(onChanged); // reverted
-    if (ok) onChanged?.();
-  };
+  const pick = (v: { brightness?: number; contrast?: number }) => applyPicture(v, onChanged);
   openPicker(
     [
       {

@@ -1,14 +1,17 @@
 // Phone remote page (remote.html → served at /remote). One screen, never scrolls: a swipe pad (or D-pad), the Xbox
-// buttons, and a keyboard sheet that types into whatever text field the TV has focused. docs/remote.md.
+// buttons, and a keyboard sheet that types into whatever text field the TV has focused. While the TV plays, a Now Playing
+// panel (remote/player.tsx) replaces the pad, one tap away in the header. docs/remote.md.
 import { render } from 'preact';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import '@fontsource-variable/inter';
 import { Icon, IconName } from '../components/icons';
 import { hostName, netError, online, pair, phoneName, send, startWatch, token, tv, unpairSelf } from './api';
+import { PlayerPanel } from './player';
 import './remote.css';
 
 type Mode = 'swipe' | 'dpad';
 const MODE_KEY = 'jsr.mode';
+const VIEW_KEY = 'jsr.view';
 
 const buzz = (ms = 8) => (navigator as any).vibrate?.(ms);
 const tap = (a: string) => (buzz(), send({ a, t: 'tap' }));
@@ -288,6 +291,7 @@ function Remote() {
   const [mode, setMode] = useState<Mode>((localStorage.getItem(MODE_KEY) as Mode) || 'swipe');
   const [kb, setKb] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [view, setView] = useState<'pad' | 'player'>(localStorage.getItem(VIEW_KEY) === 'player' ? 'player' : 'pad');
   const state = tv.value;
   const off = online.value === false;
   useEffect(() => {
@@ -296,8 +300,14 @@ function Remote() {
   const flip = (m: Mode) => {
     setMode(m);
     localStorage.setItem(MODE_KEY, m);
+    show('pad');
+  };
+  const show = (v: 'pad' | 'player') => {
+    setView(v);
+    localStorage.setItem(VIEW_KEY, v);
   };
   const np = state?.player;
+  const playerView = view === 'player' && !!np && !off;
   return (
     <div class="remote">
       <header class="top">
@@ -307,12 +317,17 @@ function Remote() {
           {(off || netError.value) && <span class="tv-off">{netError.value ? 'No connection' : 'Offline'}</span>}
         </div>
         <div class="seg" role="tablist">
-          <button class={mode === 'swipe' ? 'sel' : ''} onClick={() => flip('swipe')} aria-label="Swipe pad">
+          <button class={mode === 'swipe' && !playerView ? 'sel' : ''} onClick={() => flip('swipe')} aria-label="Swipe pad">
             <Icon name="touchpad" />
           </button>
-          <button class={mode === 'dpad' ? 'sel' : ''} onClick={() => flip('dpad')} aria-label="D-pad">
+          <button class={mode === 'dpad' && !playerView ? 'sel' : ''} onClick={() => flip('dpad')} aria-label="D-pad">
             <Icon name="gamepad" />
           </button>
+          {np && !off && (
+            <button class={'seg-np' + (playerView ? ' sel' : '')} onClick={() => show('player')} aria-label="Now playing">
+              <Icon name={np.paused ? 'pause' : 'play'} fill />
+            </button>
+          )}
         </div>
         <button class="more" aria-label="Options" onClick={() => setMenu(!menu)}>
           <Icon name="more" />
@@ -348,9 +363,10 @@ function Remote() {
           <Icon name="keyboard" /> {state.text.label} is selected. Tap to type
         </button>
       )}
-      {np && (
+      {playerView && np && <PlayerPanel p={np} />}
+      {np && !playerView && (
         <div class="np">
-          <div class="np-text">
+          <div class="np-text" onClick={() => show('player')}>
             <div class="np-title">{np.title}</div>
             {np.sub && <div class="np-sub">{np.sub}</div>}
           </div>
@@ -360,16 +376,16 @@ function Remote() {
         </div>
       )}
 
-      {mode === 'swipe' ? <SwipePad /> : <DPad />}
+      {!playerView && (mode === 'swipe' ? <SwipePad /> : <DPad />)}
 
-      <div class="shoulders">
+      <div class={'shoulders' + (playerView ? ' hidden' : '')}>
         <Btn a="lt" label="LT" text="LT" class="sh" />
         <Btn a="lb" label="LB" text="LB" class="sh" />
         <Btn a="rb" label="RB" text="RB" class="sh" />
         <Btn a="rt" label="RT" text="RT" class="sh" />
       </div>
 
-      <div class="bottom">
+      <div class={'bottom' + (playerView ? ' hidden' : '')}>
         <div class="utils">
           <Btn a="back" label="Back" icon="back" class="u" />
           <Btn label="Keyboard" icon="keyboard" class="u" onTap={() => setKb(true)} />
@@ -396,5 +412,6 @@ function App() {
 
 // iOS: no pinch / double-tap zoom, no rubber-band, no long-press callout anywhere on this page.
 document.addEventListener('gesturestart', (e) => e.preventDefault());
-document.addEventListener('touchmove', (e) => !(e.target as Element)?.closest?.('input') && e.preventDefault(), { passive: false });
+// Lists inside sheets (.scroll) scroll themselves; the page never does.
+document.addEventListener('touchmove', (e) => !(e.target as Element)?.closest?.('input, .scroll') && e.preventDefault(), { passive: false });
 render(<App />, document.getElementById('remote')!);
