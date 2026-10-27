@@ -1,0 +1,15 @@
+/* Season pills on the series page: watched checkbox + X hint (pages/Detail.tsx SeriesBody). */
+.season-pill { display: inline-flex; align-items: center; gap: 0.5rem; }
+.season-check { display: inline-flex; align-items: center; opacity: 0.55; transition: opacity var(--t-fast), color var(--t-fast); cursor: pointer; }
+.season-check svg.ico { width: 1.15rem; height: 1.15rem; }
+.season-pill.played .season-check { opacity: 1; color: var(--ok); }
+.season-pill:focus .season-check { opacity: 1; color: inherit; }
+.season-check.busy svg.ico { animation: season-spin 900ms linear infinite; }
+@keyframes season-spin { to { transform: rotate(360deg); } }
+/* Sits in the gap under the pills, so it never shifts the episode row. */
+.season-tabs { margin-bottom: 0.6rem; }
+.season-hint { display: flex; align-items: center; gap: 0.5rem; height: 1.6rem; margin-bottom: 0.6rem; font-size: 0.95rem; color: var(--fg-muted); opacity: 0; transition: opacity 250ms var(--ease); }
+.season-hint.on { opacity: 1; }
+.season-hint-key { display: inline-flex; align-items: center; justify-content: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: rgba(255, 255, 255, 0.85); color: #0b0b10; font-size: 0.8rem; font-weight: 800; }
+html.mode-mobile .season-hint, html.mouse .season-hint { display: none; }
+html.mode-mobile .season-tabs { margin-bottom: 1.2rem; }
