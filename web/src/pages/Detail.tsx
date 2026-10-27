@@ -10,7 +10,7 @@ import {
   similar, episodeLabel, TICKS_PER_MS, fmtClock, thumbUrl,
 } from '../lib/jellyfin';
 import { useAsync } from '../lib/useAsync';
-import { focusEl, focusFirst, current } from '../lib/focus';
+import { focusEl, focusFirst, current, remember, focusedKey } from '../lib/focus';
 import { pushHandler } from '../lib/input';
 import { openItem, playItem, contextMenu } from '../lib/actions';
 import { mediaBadges, streams, audioLabel, subLabel, pickTracks } from '../lib/media';
@@ -21,6 +21,7 @@ import { endsAt } from '../lib/clock';
 import { dataRev } from '../lib/datasync';
 import { Icon } from '../components/icons';
 import { PersonCard } from '../components/PersonCard';
+import '../styles/seasons.css';
 
 export function Detail({ id, seasonId, active }: { id: string; seasonId?: string; active: boolean }) {
   const [rev, setRev] = useState(0);
@@ -290,10 +291,46 @@ function SeriesBody({ series, active, initialSeason, rev, onChanged }: { series:
 
   const { data: eps } = useAsync(() => (seasonId ? episodes(series.Id, seasonId) : Promise.resolve(null)), [seasonId, rev]);
 
-  // LB / RB = previous / next season.
+  // D-pad Down from the buttons enters the season row on the SELECTED season (the up-next one), not the nearest pill (S1).
+  useEffect(() => {
+    if (!seasonId) return;
+    const id = requestAnimationFrame(() => {
+      const pill = document.querySelector<HTMLElement>(`[data-fkey="season-${seasonId}"]`);
+      if (pill && document.activeElement !== pill) remember(pill);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [seasonId, ss]);
+
+  const [busy, setBusy] = useState<string | null>(null);
+  const togglePlayed = async (s: Item) => {
+    if (busy) return;
+    const played = !!s.UserData?.Played;
+    setBusy(s.Id);
+    try {
+      const ud = await setPlayed(s.Id, !played);
+      s.UserData = { ...s.UserData, ...ud };
+      showToast(`${s.Name}: ${played ? 'marked as unwatched' : 'marked as watched'}`);
+      log('season played', s.Name, !played);
+      onChanged();
+    } catch (err) {
+      log('season played failed', String(err));
+      showToast('Action failed');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // LB / RB = previous / next season. X on a season pill = mark the season watched / unwatched.
   useEffect(() => {
     if (!active || !ss) return;
     return pushHandler((e) => {
+      if (e.action === 'x' && !e.repeat) {
+        const el = current();
+        const s = el?.dataset.fkey?.startsWith('season-') ? ss.Items.find((x) => 'season-' + x.Id === el.dataset.fkey) : undefined;
+        if (!s) return false;
+        togglePlayed(s);
+        return true;
+      }
       if ((e.action === 'lb' || e.action === 'rb') && !e.repeat) {
         const i = ss.Items.findIndex((s) => s.Id === seasonId);
         const n = i + (e.action === 'rb' ? 1 : -1);
@@ -305,7 +342,7 @@ function SeriesBody({ series, active, initialSeason, rev, onChanged }: { series:
       }
       return false;
     });
-  }, [active, ss, seasonId]);
+  }, [active, ss, seasonId, busy]);
 
   // When the season changes, keep the season row focused but scroll episodes to the next-up episode.
   const epRow = useRef<HTMLDivElement>(null);
@@ -318,22 +355,44 @@ function SeriesBody({ series, active, initialSeason, rev, onChanged }: { series:
       <Head it={series} active={active} onChanged={onChanged} playTarget={nextFull ?? next ?? null} seasonId={seasonId} />
       {ss && ss.Items.length > 0 && (
         <div class="season-tabs" data-group="seasons" data-scrollunit>
-          {ss.Items.map((s) => (
-            <div
-              key={s.Id}
-              class={'pill focusable' + (s.Id === seasonId ? ' selected' : '')}
-              tabIndex={-1}
-              data-fkey={'season-' + s.Id}
-              onFocus={() => setSeasonId(s.Id)}
-              onClick={() => {
-                setSeasonId(s.Id);
-                const first = epRow.current?.querySelector<HTMLElement>('.focusable');
-                if (first) focusEl(first);
-              }}
-            >
-              {s.Name}
-            </div>
-          ))}
+          {ss.Items.map((s) => {
+            const played = !!s.UserData?.Played;
+            return (
+              <div
+                key={s.Id}
+                class={'pill focusable season-pill' + (s.Id === seasonId ? ' selected' : '') + (played ? ' played' : '')}
+                tabIndex={-1}
+                data-fkey={'season-' + s.Id}
+                title={played ? 'Watched' : undefined}
+                onFocus={() => setSeasonId(s.Id)}
+                onClick={() => {
+                  setSeasonId(s.Id);
+                  const first = epRow.current?.querySelector<HTMLElement>('.focusable');
+                  if (first) focusEl(first);
+                }}
+              >
+                <span
+                  class={'season-check' + (busy === s.Id ? ' busy' : '')}
+                  role="checkbox"
+                  aria-checked={played}
+                  title={played ? 'Mark as unwatched' : 'Mark as watched'}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    togglePlayed(s);
+                  }}
+                >
+                  <Icon name={busy === s.Id ? 'busy' : played ? 'watched' : 'unwatched'} />
+                </span>
+                {s.Name}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {ss && ss.Items.length > 0 && (
+        <div class={'season-hint' + (focusedKey.value?.startsWith('season-') ? ' on' : '')}>
+          <span class="season-hint-key">X</span>
+          {ss.Items.find((x) => 'season-' + x.Id === focusedKey.value)?.UserData?.Played ? 'Mark season as unwatched' : 'Mark season as watched'}
         </div>
       )}
       <div ref={epRow}>
