@@ -25,8 +25,9 @@ See [integrations.md](integrations.md).
 | `JELLYSHELL_PUBLIC_BIND` | `127.0.0.1` (Docker: `0.0.0.0`) | Address of the public listener. Bare metal: use `0.0.0.0` only when the proxy runs on another host. In Docker the published port (`127.0.0.1:8093:8093`) limits access instead. |
 | `JELLYSHELL_PUBLIC_PREFIX` | `/jellyshell` | Sub-path the proxy serves the UI under. Both prefix-stripping and pass-through proxies work. `''` = served at `/`. |
 | `JELLYSHELL_DEBUG` | `0` | `1` enables the LAN-only debug hooks: the remote-control queue (`POST /api/cmd`, used by `tools/ui.py` / `tools/drive.py`) and `POST /snap`. Off by default; never available on the public listener. |
+| `JELLYSHELL_REMOTE` | `1` | Phone remote: the `/remote` page and the pairing/input relay (`/api/remote/*`) on both listeners. `0` turns it off (Settings → Phone remote then says so). Paired phones are kept in `$JELLYSHELL_DATA_DIR/remote.json` (hashed tokens). See [remote.md](remote.md). |
 | `JELLYSHELL_HOST_PORT`, `DASH_HOST_PORT` | `8097`, `8098` | docker compose only: the host ports the LAN listeners are published on. To move a service, change these, not `JELLYSHELL_PORT` / `DASH_PORT` (the ports inside the container). |
-| `JELLYSHELL_DATA_DIR` | `web-poc/` (Docker: `/data`) | Runtime files: `client.log`, `subs_created.json`, `snaps/`, `apk/` (Android APKs served at `/tv.apk`, `/android.apk`). |
+| `JELLYSHELL_DATA_DIR` | `web-poc/` (Docker: `/data`) | Runtime files: `client.log`, `subs_created.json`, `remote.json`, `snaps/`, `apk/` (Android APKs served at `/tv.apk`, `/android.apk`). |
 | `JELLYSHELL_LOG_FILE` | `$JELLYSHELL_DATA_DIR/client.log` | Client log lines (`POST /log`), with the Jellyfin API key scrubbed. |
 | `JELLYSHELL_TZ`, `TZ` | host zone, else `UTC` | Household clock (IANA name, e.g. `America/New_York`) returned as `timeZone` in `GET /api/config`; the UI uses it for "ends at" times when Settings → Time zone is Auto. |
 | `JELLYSHELL_DIST` | `web/dist` | Built UI to serve (rarely needed). |

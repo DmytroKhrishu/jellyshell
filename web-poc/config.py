@@ -62,6 +62,7 @@ PUBLIC_PORT = int(env('JELLYSHELL_PUBLIC_PORT', '0'))  # 0 = public hardened lis
 _prefix = os.environ.get('JELLYSHELL_PUBLIC_PREFIX', '/jellyshell').strip().rstrip('/')
 PUBLIC_PREFIX = ('/' + _prefix.lstrip('/')) if _prefix else ''
 DEBUG = env('JELLYSHELL_DEBUG', '0').lower() in ('1', 'true', 'yes', 'on')
+REMOTE = env('JELLYSHELL_REMOTE', '1').lower() in ('1', 'true', 'yes', 'on')  # phone remote (/remote + /api/remote/*)
 DATA_DIR = Path(env('JELLYSHELL_DATA_DIR', '/data' if IN_DOCKER else str(HERE))).expanduser()
 LOG_FILE = Path(env('JELLYSHELL_LOG_FILE', str(DATA_DIR / 'client.log'))).expanduser()
 STORE_PRODUCT_ID = env('STORE_PRODUCT_ID')

@@ -39,6 +39,8 @@ with HDMI mode and frame-rate switching.
   segments) with a next-episode countdown, "Are you still watching?", per-series audio/subtitle memory, audio boost and
   night mode.
 - **Browsing**: Home rows, Movies and Shows libraries with sort and filters, search, cast and person pages, release dates.
+- **Phone remote**: pair a phone with a 6-digit code (or QR) and get a full-screen remote page: swipe pad or D-pad, the
+  Xbox buttons, play/pause, and typing into the TV's search and text fields. Works as a Home Screen web app.
 - **Optional integrations** (each turns itself off when not configured):
   - **Seerr / Jellyseerr / Overseerr**: request movies and shows, "My Requests", TMDB pages for titles you don't have yet.
   - **Sonarr / Radarr / qBittorrent**: a read-only Downloads queue with live speed and ETA, plus a release calendar (admins).

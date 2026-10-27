@@ -10,7 +10,8 @@ import {
   SkipForward, RotateCcw, Check, Heart, CircleCheck, ChevronRight, ChevronLeft, ChevronDown, Star, FileSearch, TimerReset,
   Volume2, Moon, CircleAlert, CircleDashed, LoaderCircle, Clock, ChartPie, Trash, Eye, Clapperboard, ArrowDownToLine, Hourglass,
   Undo2, Sparkles, X, Sun, Contrast, LayoutDashboard, Server, Maximize, Minimize, CalendarDays, Ticket, MonitorPlay, Disc3,
-  User, MapPin, Cake, ChevronUp, Library, SlidersHorizontal,
+  User, MapPin, Cake, ChevronUp, Library, SlidersHorizontal, Smartphone, Keyboard, Menu, Copy, ArrowLeft, Gamepad2, Hand, WifiOff,
+  CornerDownLeft,
 } from 'lucide-preact';
 
 export type IconComp = ComponentType<any>;
@@ -72,6 +73,15 @@ export const I = {
   chevUp: ChevronUp,
   library: Library,
   options: SlidersHorizontal,
+  phone: Smartphone,
+  keyboard: Keyboard,
+  menuBtn: Menu,
+  viewBtn: Copy,
+  back: ArrowLeft,
+  gamepad: Gamepad2,
+  touchpad: Hand,
+  offline: WifiOff,
+  enter: CornerDownLeft,
 } satisfies Record<string, IconComp>;
 
 export type IconName = keyof typeof I;

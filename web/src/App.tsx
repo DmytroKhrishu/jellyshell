@@ -19,6 +19,7 @@ import { Icon, IconName } from './components/icons';
 import { auth, logout, setAuth, DEFAULT_SERVER } from './lib/jellyfin';
 import { TABS, tab, stack, switchTab, tabStep, pop, push, takeRestore, visitedTabs, top, visibleTabs, playerActive } from './lib/router';
 import './lib/caps'; // per-user capabilities (hides Downloads etc.)
+import './lib/remote'; // phone remote host (resumes polling when a phone is paired)
 import { dashAvailable, switchSide, viewCameFromTextInput } from './lib/sides';
 import { needsServerSetup, ServerSetup } from './components/ServerSetup';
 import './styles/sides.css';

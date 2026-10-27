@@ -13,6 +13,9 @@ import { sideInfo, setStartSide } from '../lib/sides';
 import { NEXT_AUTOPLAY } from '../components/NextCountdown';
 import { uiServers } from '../lib/uiservers';
 import { openUiServerDialog, uiServerLabel, UiServerDialog } from '../components/UiServerDialog';
+import { openRemoteDialog, RemoteDialog } from '../components/RemoteDialog';
+import { remotes } from '../lib/remote';
+import { noPageServer } from '../lib/uisource';
 
 const STILL_WATCHING: [number, string][] = [[0, 'Off'], [30, '30 min'], [60, '1 hour'], [120, '2 hours'], [180, '3 hours']];
 const SKIP_INTROS: ['ask' | 'seen' | 'always', string, string][] = [
@@ -169,6 +172,18 @@ export function Settings({ active }: { active: boolean }) {
               />
             )}
           </div>
+          {!noPageServer() && (
+            <div class="set-group">
+              <h3>Remote</h3>
+              <SetRow
+                label="Phone remote"
+                hint="Control this screen from your phone: D-pad, swipe pad, buttons and typing. Pair with a code."
+                value={remotes.value?.length ? `${remotes.value.length} paired` : 'Pair a phone'}
+                fkey="set-remote"
+                onClick={() => openRemoteDialog()}
+              />
+            </div>
+          )}
           <div class="set-group">
             <h3>Account</h3>
             {uiServers.value && (
@@ -215,6 +230,7 @@ export function Settings({ active }: { active: boolean }) {
         </div>
       </div>
       <UiServerDialog />
+      <RemoteDialog />
     </div>
   );
 }

@@ -9,6 +9,10 @@ const proxy = api ? Object.fromEntries(['/api', '/log'].map((p) => [p, api])) : 
 export default defineConfig({
   plugins: [preact()],
   base: './', // relative assets: served at / (LAN, Xbox) and under a sub-path (/jellyshell/ behind a reverse proxy / tunnel)
-  build: { outDir: 'dist', target: 'chrome100', sourcemap: true, assetsInlineLimit: 0 },
+  build: {
+    outDir: 'dist', target: 'chrome100', sourcemap: true, assetsInlineLimit: 0,
+    // Second page: the phone remote (remote.html, served at /remote). Its own small bundle, no TV app code.
+    rollupOptions: { input: { main: 'index.html', remote: 'remote.html' } },
+  },
   server: { host: process.env.VITE_HOST || 'localhost', port: Number(process.env.VITE_PORT) || 5173, proxy },
 });

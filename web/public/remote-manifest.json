@@ -1,0 +1,16 @@
+{
+  "name": "JellyShell Remote",
+  "short_name": "Remote",
+  "description": "Phone remote for JellyShell on your TV.",
+  "id": "./remote",
+  "start_url": "./remote",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07070b",
+  "theme_color": "#07070b",
+  "icons": [
+    { "src": "icons/icon-256.png", "sizes": "256x256", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-600.png", "sizes": "600x600", "type": "image/png", "purpose": "any" }
+  ]
+}
