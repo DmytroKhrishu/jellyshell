@@ -8,6 +8,10 @@ Pairing is between instances, not Jellyfin accounts (docs/remote.md):
   - Input: phone POST /api/remote/send -> per-host queue -> the host long-polls GET /api/remote/poll (held 25 s, answered
     the moment a command arrives). State back (focused text field, now playing): host POST /api/remote/state -> phone
     long-polls GET /api/remote/watch.
+  - Player control: `{player:{op,...}}` commands, each op validated and bounded here (_player). The poster for the phone's
+    lock screen comes through GET /api/remote/art/<key>: the key is random, minted for the host's CURRENT item only, and the
+    image is fetched server-side from JELLYFIN_URL (Jellyfin serves item images anonymously), so the phone needs no Jellyfin
+    token and works on the public URL while the TV is on the LAN.
 Commands older than STALE_S are dropped at delivery: a TV that reconnects must never replay a burst of old presses.
 Both listeners (LAN + public) share this module's state, so a phone on the public URL can drive a TV on the LAN URL.
 """
@@ -18,6 +22,7 @@ import secrets
 import threading
 import time
 import urllib.parse
+import urllib.request
 
 import access
 import config
@@ -31,7 +36,8 @@ STALE_S = 4          # undelivered input older than this is dropped
 CODE_TTL = 600
 MAX_HOSTS = 64
 MAX_REMOTES = 12
-MAX_STATE = 4096
+MAX_STATE = 32768    # now playing carries track lists + the season's episodes (the TV trims to fit)
+ART_MAX = 1024 * 1024  # one cached poster per host (~100 KB at 600 px)
 STORE = config.DATA_DIR / 'remote.json'
 
 PAIR = access.Bucket(rate=0.2, burst=8)      # per IP: code guesses
@@ -42,6 +48,7 @@ _hosts = {}    # host id -> {'key', 'name', 'created', 'remotes': {token sha: {'
 _live = {}     # host id -> {'seq', 'cmds': [(seq, t, cmd)], 'polled', 'state', 'v'}
 _codes = {}    # code -> (host id, expires)
 _fails = []    # failed pair attempts (all IPs), for a global brake
+_art = {}      # art key -> {'host', 'src': (item id, tag), 'img': (ctype, bytes) | None}
 
 
 def _sha(s):
@@ -129,7 +136,106 @@ def _cmd(c):
         return {'key': c['key']}
     if c.get('playpause'):
         return {'playpause': True}
+    if isinstance(c.get('player'), dict):
+        p = _player(c['player'])
+        return {'player': p} if p else None
     return None
+
+
+def _int(v, lo, hi):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        raise ValueError
+    return max(lo, min(hi, int(v)))
+
+
+def _num(v, lo, hi):
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != v:
+        raise ValueError
+    return max(lo, min(hi, float(v)))
+
+
+def _player(p):
+    """Validate one player op from the phone (the TV maps each to the player's own handler). None = dropped."""
+    op = p.get('op')
+    try:
+        if op in ('pp', 'play', 'pause', 'next', 'skipSeg'):
+            return {'op': op}
+        if op == 'seek':
+            return {'op': op, 'ms': _int(p.get('ms'), 0, 24 * 3600_000)}
+        if op == 'skip':
+            return {'op': op, 'ms': _int(p.get('ms'), -600_000, 600_000)}
+        if op in ('audio', 'sub'):
+            return {'op': op, 'i': _int(p.get('i'), -1, 9999)}
+        if op == 'subOff' and p.get('d') in (-500, 0, 500):
+            return {'op': op, 'd': p['d']}
+        if op == 'boost':
+            return {'op': op, 'db': _int(p.get('db'), 0, 20)}
+        if op == 'night' and isinstance(p.get('on'), bool):
+            return {'op': op, 'on': p['on']}
+        if op == 'pic':
+            out = {'op': op}
+            if 'b' in p:
+                out['b'] = _num(p['b'], 0, 100)
+            if 'c' in p:
+                out['c'] = _num(p['c'], 0.5, 2)
+            return out if len(out) > 1 else None
+        if op == 'ep' and isinstance(p.get('id'), str) and re.fullmatch(r'[0-9a-fA-F]{32}', p['id']):
+            return {'op': op, 'id': p['id']}
+    except ValueError:
+        pass
+    return None
+
+
+def _art_key(hid, state):
+    """Swap the player's art {id, tag} for a capability URL; same image = same key (the phone doesn't refetch on every tick)."""
+    pl = state.get('player') if isinstance(state, dict) else None
+    a = pl.pop('art', None) if isinstance(pl, dict) else None
+    src = None
+    if isinstance(a, dict) and isinstance(a.get('id'), str) and re.fullmatch(r'[0-9a-fA-F]{32}', a['id']):
+        tag = a.get('tag') if isinstance(a.get('tag'), str) and re.fullmatch(r'[0-9a-zA-Z]{1,64}', a.get('tag') or '') else ''
+        src = (a['id'], tag)
+    old = [k for k, v in _art.items() if v['host'] == hid]
+    for k in old:
+        if src and _art[k]['src'] == src:
+            pl['art'] = 'api/remote/art/' + k
+            return
+        _art.pop(k)
+    if src:
+        k = secrets.token_urlsafe(18)
+        _art[k] = {'host': hid, 'src': src, 'img': None}
+        pl['art'] = 'api/remote/art/' + k
+
+
+def _serve_art(handler, key):
+    with _cv:
+        a = _art.get(key)
+        src, img = (a['src'], a['img']) if a else (None, None)
+    if not src:
+        raise Err(404, 'not found')
+    if not img:
+        q = urllib.parse.urlencode({'maxWidth': 600, 'quality': 80, **({'tag': src[1]} if src[1] else {})})
+        req = urllib.request.Request(f"{config.JELLYFIN_URL}/Items/{src[0]}/Images/Primary?{q}", headers={'Accept': 'image/*'})
+        try:
+            with urllib.request.urlopen(req, timeout=8) as r:
+                ctype = r.headers.get('Content-Type', '')
+                body = r.read(ART_MAX + 1)
+        except OSError:
+            raise Err(502, 'image unavailable') from None
+        if not ctype.startswith('image/') or len(body) > ART_MAX:
+            raise Err(502, 'image unavailable')
+        img = (ctype.split(';')[0], body)
+        with _cv:
+            if key in _art:
+                _art[key]['img'] = img
+    try:
+        handler.send_response(200)
+        handler.send_header('Content-Type', img[0])
+        handler.send_header('Cache-Control', 'private, max-age=86400')
+        handler.send_header('Content-Length', str(len(img[1])))
+        handler.end_headers()
+        handler.wfile.write(img[1])
+    except OSError:
+        pass
 
 
 def _body(handler, cap=MAX_STATE * 4):
@@ -172,6 +278,8 @@ def _route(handler, method, path, ip):
                     if not idle:
                         raise Err(507, 'too many hosts')
                     _hosts.pop(idle[0][0])
+                    for k in [k for k, v in _art.items() if v['host'] == idle[0][0]]:
+                        _art.pop(k)
                 h = _hosts[hid] = {'key': _sha(key), 'name': '', 'created': now, 'remotes': {}}
             name = _name(b.get('name'), 'TV')
             if h['name'] != name or not h.get('saved'):
@@ -221,6 +329,7 @@ def _route(handler, method, path, ip):
         with _cv:
             hid, _ = _host(handler)
             lv = _live_of(hid)
+            _art_key(hid, b)
             lv['state'], lv['v'] = b, lv['v'] + 1
             _cv.notify_all()
             return 200, {'ok': True}
@@ -316,6 +425,8 @@ def handle(handler, method):
             raise Err(404, 'phone remote is off')
         if not TRAFFIC.allow(ip):
             raise Err(429, 'slow down')
+        if method == 'GET' and path.startswith('/api/remote/art/'):  # lock-screen poster (key = capability, see _art_key)
+            return _serve_art(handler, path.rsplit('/', 1)[-1]) or True
         code, out = _route(handler, method, path, ip)
     except Err as e:
         code, out = e.code, {'error': str(e)}

@@ -26,8 +26,46 @@ export const remotes = signal<PairedPhone[] | null>(null);
 /** Last pairing event, for the dialog ("iPhone connected"). */
 export const remoteEvent = signal<{ kind: 'paired' | 'unpaired'; name?: string; at: number } | null>(null);
 
-/** Player hook: the phone's dedicated play/pause button + "now playing" line. */
-export const nowPlaying = signal<{ title: string; sub?: string; paused: boolean; toggle: () => void } | null>(null);
+/** What the phone's Now Playing panel shows (serializable; posted in POST /api/remote/state). docs/remote.md. */
+export interface PlayerState {
+  title: string;
+  sub?: string;
+  paused: boolean;
+  pos: number; // ms
+  dur: number; // ms
+  buffering?: boolean;
+  name?: string; // episode / movie name (lock-screen title)
+  series?: string;
+  art?: { id: string; tag?: string }; // poster: the relay turns it into a capability URL (api/remote/art/<key>)
+  skipMs: number; // the TV's short skip step
+  audio: { i: number; label: string }[];
+  a: number; // current audio stream index
+  subs: { i: number; label: string; note?: string }[];
+  s: number; // current subtitle index, -1 = off
+  subOff: number | null; // manual subtitle offset (ms); null = not adjustable now (no text subtitle on)
+  boost: { ok: boolean; db: number; night: boolean; steps: number[]; note?: string };
+  pic: { b: number; c: number; bs: [number, string][]; cs: [number, string][] } | null; // HDR picture (tone-mapped + canEdit only)
+  next: { id: string; label: string } | null;
+  seg: string | null; // skippable segment now on screen (Intro / Recap / Preview)
+  eps: { id: string; label: string; name: string; played?: boolean; now?: boolean }[] | null; // current season
+}
+/** Phone → player commands (validated again by web-poc/remote_relay.py). */
+export type PlayerOp =
+  | { op: 'pp' | 'play' | 'pause' | 'next' | 'skipSeg' }
+  | { op: 'seek'; ms: number }
+  | { op: 'skip'; ms: number }
+  | { op: 'audio' | 'sub'; i: number }
+  | { op: 'subOff'; d: number }
+  | { op: 'boost'; db: number }
+  | { op: 'night'; on: boolean }
+  | { op: 'pic'; b?: number; c?: number }
+  | { op: 'ep'; id: string };
+/** Player hook: live state for the phone + a dispatcher that runs the player's own handlers (same paths as its dialogs). */
+export const nowPlaying = signal<{ state: () => PlayerState; act: (o: PlayerOp) => void } | null>(null);
+/** True while at least one phone is paired and this instance is polling (Player loads the season's episodes only then). */
+export const remoteLive = signal(false);
+/** Player: something discrete changed (pause, track, boost, seek...). Position alone is sent on a coarse tick. */
+export const playerChanged = () => pushState();
 
 function host(): { id: string; key: string } {
   try {
@@ -123,6 +161,7 @@ async function loop() {
       const first = seq < 0;
       seq = r.seq;
       if (!first) for (const c of r.cmds) await run(c);
+      remoteLive.value = r.remotes > 0;
       if (r.remotes > 0) {
         idle = 0;
         localStorage.setItem(HOST_KEY + '.paired', '1');
@@ -141,6 +180,7 @@ async function loop() {
     }
   }
   polling = false;
+  remoteLive.value = false;
 }
 
 // ---------------- commands ----------------
@@ -166,8 +206,13 @@ async function run(c: any) {
   }
   if (ACTIONS.has(c.a)) return injectPress(c.a, c.t === 'down' || c.t === 'up' ? c.t : 'tap');
   if (c.playpause) {
-    if (nowPlaying.value) nowPlaying.value.toggle();
+    if (nowPlaying.value) nowPlaying.value.act({ op: 'pp' });
     else injectPress('select', 'tap');
+    return;
+  }
+  if (c.player && typeof c.player.op === 'string') {
+    if (nowPlaying.value) nowPlaying.value.act(c.player as PlayerOp);
+    pushState();
     return;
   }
   if (typeof c.text === 'string') {
@@ -208,14 +253,18 @@ function snapshot() {
   const np = nowPlaying.value;
   return {
     text: el ? { label: label.trim().slice(0, 60), value: el.type === 'password' ? '' : el.value.slice(0, 500), secret: el.type === 'password' } : null,
-    player: np ? { title: np.title.slice(0, 120), sub: np.sub?.slice(0, 120), paused: np.paused } : null,
+    player: np ? np.state() : null,
   };
 }
 export function pushState() {
   if (!polling || stateTimer) return;
   stateTimer = window.setTimeout(() => {
     stateTimer = 0;
-    const s = JSON.stringify(snapshot());
+    const snap = snapshot();
+    let s = JSON.stringify(snap);
+    // The relay caps the state at 32 KB: a huge season / track list loses the episode list first, then the track lists.
+    if (s.length > 30_000 && snap.player) s = JSON.stringify({ ...snap, player: { ...snap.player, eps: null } });
+    if (s.length > 30_000 && snap.player) s = JSON.stringify({ ...snap, player: { ...snap.player, eps: null, subs: snap.player.subs.slice(0, 20), audio: snap.player.audio.slice(0, 20) } });
     if (s === lastState) return;
     lastState = s;
     call('state', { method: 'POST', body: s }).catch(() => (lastState = ''));
@@ -225,6 +274,11 @@ document.addEventListener('focusin', pushState);
 document.addEventListener('focusout', pushState);
 document.addEventListener('input', pushState);
 nowPlaying.subscribe(pushState);
+// Coarse position tick while playing (the phone interpolates in between).
+window.setInterval(() => {
+  const np = nowPlaying.value;
+  if (np && polling && remoteLive.value && !np.state().paused) pushState();
+}, 5000);
 
 // Resume polling on launch when this instance already has paired phones.
 auth.subscribe((a) => {
