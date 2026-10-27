@@ -87,10 +87,12 @@ svg.ico { width: 1.15em; height: 1.15em; flex: none; stroke-linecap: round; stro
 .pad-flash.hold { background: radial-gradient(circle at 50% 50%, rgba(167, 139, 250, 0.3), transparent 65%); animation-duration: 700ms; }
 @keyframes flash { from { opacity: 1; } to { opacity: 0; } }
 
-.dpad { display: grid; place-items: center; }
+.dpad { container-type: size; }
+/* Explicit size from the pad's own box (cqmin), absolutely centred: iOS Safari mis-centred the old grid + aspect-ratio
+   version (ring shifted right and clipped). */
 .dpad-ring {
-  --s: min(78vw, calc(100% - 4px), 300px);
-  position: relative; width: var(--s); aspect-ratio: 1; max-height: 100%; border-radius: 50%;
+  position: absolute; left: 50%; top: 50%; width: min(300px, 92cqmin); height: min(300px, 92cqmin); transform: translate(-50%, -50%);
+  border-radius: 50%;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.04) 34%, rgba(255, 255, 255, 0.08) 35%, rgba(255, 255, 255, 0.05) 70%);
   border: 1px solid var(--line);
 }
