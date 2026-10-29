@@ -36,6 +36,7 @@ import { NextCard, nextAutoplayMode, nextLabel, useNextCountdown } from '../comp
 import { nextTiming, noteFinished, segEnd } from '../lib/introskip';
 import { useRemotePlayer } from '../components/RemotePlayer';
 import { useCreditsShelf } from '../components/CreditsShelf';
+import type { SItem } from '../lib/seerr';
 
 const HIDE_MS = 8000;
 const WAKE_HINT_MS = 4000;
@@ -462,6 +463,17 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     }
   };
 
+  /** Credits shelf pick of a title not in the library: the film is done; leave the player for its TMDB page (request it there). */
+  const openTmdbFromShelf = (t: SItem) => {
+    if (r.current.exiting || (t.mediaType !== 'movie' && t.mediaType !== 'tv')) return;
+    r.current.exiting = true;
+    const s = r.current.sess;
+    if (s && r.current.started) reportStopped(s, r.current.dur || r.current.pos);
+    r.current.started = false;
+    send({ type: 'stop', restore: 'now' });
+    replaceTop({ name: 'tmdb', type: t.mediaType, id: t.id });
+  };
+
   // ---------- segments / next ----------
   const activeSeg = segments.find((s) => ['Intro', 'Recap', 'Preview'].includes(s.Type) && pos >= s.StartTicks / TICKS_PER_MS && pos < s.EndTicks / TICKS_PER_MS - 1500);
   // Card at a plausible Outro start, else 40 s before the end (lib/introskip.ts). Segments are file times: measure against the item's
@@ -491,6 +503,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     item: it, segments, runtimeMs: (it?.RunTimeTicks ?? 0) / TICKS_PER_MS || dur, posMs: pos, root,
     suppressed: !!activeSeg || (!ui && preview !== null),
     open: (n, details) => openFromShelf(n, details),
+    openTmdb: (t) => openTmdbFromShelf(t),
   });
   const shelfRef = useRef(shelf);
   shelfRef.current = shelf;

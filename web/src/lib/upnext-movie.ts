@@ -19,6 +19,9 @@
 import { Item, ItemsResult, TICKS_PER_MS, api, auth } from './jellyfin';
 import { Segment } from './playback';
 import { log } from './log';
+import { SItem } from './seerr';
+import { franchise, seerrRows, tmdbKey } from './franchise';
+import { libraryIndex } from './person';
 
 const MIN_CREDITS_MS = 120_000;
 const MIN_FRAC = 0.85;
@@ -65,10 +68,14 @@ export function creditsTiming(item: Item | null, segments: Segment[], runtimeMs:
 
 // ---------- related titles ----------
 export interface ShelfItem {
-  item: Item;
+  /** Stable key (Jellyfin id, or "tmdb-<type>:<id>" for titles not in the library). */
+  key: string;
+  /** Library item; absent for a TMDB-only franchise title (then `tmdb` is set and A opens its TMDB page). */
+  item?: Item;
+  tmdb?: SItem;
   /** Short card subtitle ("Next part · 2013"); undefined = the card's default (year). */
   note?: string;
-  why: 'collection-next' | 'collection-prev' | 'similar';
+  why: 'collection-next' | 'collection-prev' | 'world' | 'similar';
 }
 
 const uid = () => auth.value!.userId;
@@ -124,11 +131,35 @@ async function collectionParts(item: Item): Promise<Item[]> {
   return parts.sort((a, b) => released(a) - released(b) || a.Name.localeCompare(b.Name));
 }
 
-/** What to offer at the end credits: next parts, unwatched earlier parts, similar (unwatched first), watched leftovers. */
+/** Same-world titles (web-poc/franchise.py: TMDB collection + cross-type spin-offs, e.g. a movie's TV show), split into
+ *  library items and TMDB-only ones. [] without Seerr; never throws. */
+async function worldFor(item: Item): Promise<{ lib: Item[]; ext: SItem[] }> {
+  if (!seerrRows()) return { lib: [], ext: [] };
+  // The player's item is fetched without ProviderIds: take them from the cached movie index.
+  type P = Item & { ProviderIds?: Record<string, string> };
+  const self = ((item as P).ProviderIds ? item : (await movieIndex().catch(() => [] as Item[])).find((m) => m.Id === item.Id)) as P | undefined;
+  const tmdb = Number(self?.ProviderIds?.Tmdb);
+  if (!tmdb) return { lib: [], ext: [] };
+  const [world, idx] = await Promise.all([franchise('movie', tmdb), libraryIndex().catch(() => new Map<string, Item>())]);
+  const lib: Item[] = [];
+  const ext: SItem[] = [];
+  for (const w of world) {
+    const li = idx.get(tmdbKey(w));
+    if (li) lib.push(li);
+    else ext.push(w);
+  }
+  return { lib, ext };
+}
+
+const WORLD_EXT_MAX = 6;
+
+/** What to offer at the end credits: next parts, same-world titles (library, then up to 6 from TMDB), unwatched earlier
+ *  parts, similar (unwatched first), watched leftovers. */
 export async function relatedForPlayer(item: Item, max = 16): Promise<ShelfItem[]> {
-  const [parts, sim] = await Promise.all([
+  const [parts, sim, world] = await Promise.all([
     collectionParts(item).catch(() => [] as Item[]),
     api<ItemsResult>(`/Items/${item.Id}/Similar?userId=${uid()}&Limit=24&${LIST}`).then((r) => r.Items).catch(() => [] as Item[]),
+    worldFor(item).catch(() => ({ lib: [] as Item[], ext: [] as SItem[] })),
   ]);
   const i = parts.findIndex((p) => p.Id === item.Id);
   const after = i >= 0 ? parts.slice(i + 1) : [];
@@ -139,14 +170,25 @@ export async function relatedForPlayer(item: Item, max = 16): Promise<ShelfItem[
   const add = (it: Item, why: ShelfItem['why'], note?: string) => {
     if (seen.has(it.Id) || out.length >= max) return;
     seen.add(it.Id);
-    out.push({ item: it, why, note });
+    out.push({ key: it.Id, item: it, why, note });
+  };
+  const addExt = (t: SItem) => {
+    const k = 'tmdb-' + tmdbKey(t);
+    if (seen.has(k) || out.length >= max) return;
+    seen.add(k);
+    const y = (t.releaseDate || t.firstAirDate || '').slice(0, 4);
+    const label = t.mediaType === 'tv' ? 'Series' : 'Movie';
+    out.push({ key: k, tmdb: t, why: 'world', note: label + (y && y !== '9999' ? ' · ' + y : '') });
   };
   after.forEach((it, k) => add(it, 'collection-next', (k === 0 ? 'Next part' : 'Later part') + yr(it)));
+  // Same world (spin-off shows, specials): library copies first, then a few TMDB-only titles (open their TMDB page).
+  world.lib.filter((it) => it.Id !== item.Id).forEach((it) => add(it, 'world', (it.Type === 'Series' ? 'Series' : 'Same world') + yr(it)));
+  world.ext.slice(0, WORLD_EXT_MAX).forEach(addExt);
   before.filter(unwatched).forEach((it) => add(it, 'collection-prev', 'Earlier part' + yr(it)));
   // Similar: Jellyfin's order (best match first) with unwatched titles ahead of watched ones.
   sim.filter(unwatched).forEach((it) => add(it, 'similar'));
   before.filter((it) => !unwatched(it)).forEach((it) => add(it, 'collection-prev', 'Earlier part' + yr(it)));
   sim.filter((it) => !unwatched(it)).forEach((it) => add(it, 'similar'));
-  log('credits shelf: related', { item: item.Name, parts: parts.length, next: after.length, similar: sim.length, shown: out.length });
+  log('credits shelf: related', { item: item.Name, parts: parts.length, next: after.length, similar: sim.length, world: world.lib.length + '+' + world.ext.length, shown: out.length });
   return out;
 }

@@ -19,6 +19,7 @@ import { settings } from '../lib/settings';
 import { log } from '../lib/log';
 import { Img } from './Img';
 import { Icon } from './icons';
+import { SItem, tmdbImg } from '../lib/seerr';
 import '../styles/creditsshelf.css';
 
 /** Start loading the related titles this long before the shelf is due. */
@@ -35,6 +36,8 @@ export interface CreditsShelfOpts {
   root: RefObject<HTMLElement>;
   /** A on a card: play the movie (details=false) or open its page. */
   open: (it: Item, details: boolean) => void;
+  /** A on a TMDB-only title (not in the library): open its TMDB page. */
+  openTmdb: (it: SItem) => void;
 }
 
 export function useCreditsShelf(o: CreditsShelfOpts) {
@@ -88,8 +91,9 @@ export function useCreditsShelf(o: CreditsShelfOpts) {
     }
   };
   const pick = (s: ShelfItem, details: boolean) => {
-    log('credits shelf: open', { from: o.item?.Name, to: s.item.Name, type: s.item.Type, why: s.why, details });
-    o.open(s.item, details);
+    log('credits shelf: open', { from: o.item?.Name, to: s.item?.Name ?? s.tmdb?.title ?? s.tmdb?.name, type: s.item?.Type ?? 'tmdb-' + s.tmdb?.mediaType, why: s.why, details });
+    if (s.item) o.open(s.item, details);
+    else if (s.tmdb) o.openTmdb(s.tmdb);
   };
 
   /** Player key hook. true = consumed. */
@@ -126,7 +130,7 @@ export function useCreditsShelf(o: CreditsShelfOpts) {
         if (!here) return false;
         if (e.repeat) return true;
         const id = current()?.dataset.fkey?.slice(3);
-        const s = items?.find((x) => x.item.Id === id);
+        const s = items?.find((x) => x.key === id);
         if (s) pick(s, true);
         return true;
       }
@@ -151,7 +155,7 @@ export function useCreditsShelf(o: CreditsShelfOpts) {
         <div class="row-viewport" data-hscroll data-group="cshelf">
           <div class="row-track">
             {items.map((s) => (
-              <ShelfCard key={s.item.Id} s={s} onPick={() => pick(s, false)} onDetails={() => pick(s, true)} />
+              <ShelfCard key={s.key} s={s} onPick={() => pick(s, false)} onDetails={() => pick(s, true)} />
             ))}
           </div>
         </div>
@@ -162,13 +166,14 @@ export function useCreditsShelf(o: CreditsShelfOpts) {
 }
 
 function ShelfCard({ s, onPick, onDetails }: { s: ShelfItem; onPick: () => void; onDetails: () => void }) {
+  if (!s.item) return <TmdbShelfCard s={s} t={s.tmdb!} onPick={onPick} />;
   const it = s.item;
   const pct = progressPct(it);
   const played = it.UserData?.Played;
   const sub = s.note ?? (it.Type === 'Series' ? 'Series' + (it.ProductionYear ? ' · ' + it.ProductionYear : '') : it.ProductionYear ? String(it.ProductionYear) : '');
   // No data-item: the app-wide card shortcuts (long-press menu, X = play) must not fire inside the player.
   return (
-    <div class={'card thumb focusable cs-card' + (s.why === 'collection-next' ? ' cs-next' : '')} tabIndex={-1} data-fkey={'cs-' + it.Id} onClick={onPick}
+    <div class={'card thumb focusable cs-card' + (s.why === 'collection-next' ? ' cs-next' : '')} tabIndex={-1} data-fkey={'cs-' + s.key} onClick={onPick}
       onContextMenu={(e) => (e.preventDefault(), e.stopPropagation(), onDetails())}>
       <div class="card-art">
         <Img src={thumbUrl(it, 520)} alt={it.Name} />
@@ -189,6 +194,25 @@ function ShelfCard({ s, onPick, onDetails }: { s: ShelfItem; onPick: () => void;
       <div class="card-text">
         <div class="card-title">{it.Name}</div>
         {sub && <div class="card-sub">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+/** A franchise title that isn't in the library (e.g. the TV spin-off of a movie): TMDB backdrop, A opens its TMDB page. */
+function TmdbShelfCard({ s, t, onPick }: { s: ShelfItem; t: SItem; onPick: () => void }) {
+  const title = t.title ?? t.name ?? '';
+  return (
+    <div class="card thumb focusable cs-card cs-tmdb" tabIndex={-1} data-fkey={'cs-' + s.key} onClick={onPick} onContextMenu={(e) => (e.preventDefault(), e.stopPropagation(), onPick())}>
+      <div class="card-art">
+        <Img src={tmdbImg(t.backdropPath, 'w780') ?? tmdbImg(t.posterPath, 'w500')} alt={title} />
+        <div class="cs-play" aria-hidden="true">
+          <Icon name="info" />
+        </div>
+      </div>
+      <div class="card-text">
+        <div class="card-title">{title}</div>
+        {s.note && <div class="card-sub">{s.note}</div>}
       </div>
     </div>
   );
