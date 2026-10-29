@@ -63,13 +63,7 @@ def public_config(caps=None):
     return out
 
 
-def privacy_page():
-    import html as _html
-    page = (ROOT / 'privacy.html').read_text()
-    c = _html.escape(config.PRIVACY_CONTACT, quote=True)
-    contact = (f'<p>Questions about this policy: <a href="mailto:{c}">{c}</a>.</p>' if c
-               else '<p>Questions about this policy: contact the administrator of this server.</p>')
-    return page.replace('<!--CONTACT-->', contact).encode()
+PRIVACY_URL = 'https://github.com/DmytroKhrishu/jellyshell/blob/main/docs/privacy.md'
 
 
 def _append_log(ip, line):
@@ -107,8 +101,11 @@ class H(BaseHTTPRequestHandler):
             return
         if path in ('/remote', '/remote.html') and config.REMOTE:  # phone remote page (web/remote.html)
             self._static('/remote.html')
-        elif path in ('/privacy', '/privacy/', '/privacy.html'):  # privacy policy (static, both listeners)
-            self._send(200, privacy_page(), 'text/html; charset=utf-8')
+        elif path in ('/privacy', '/privacy/', '/privacy.html'):  # old Store privacy URL -> docs/privacy.md on GitHub
+            self.send_response(301)
+            self.send_header('Location', PRIVACY_URL)
+            self.send_header('Content-Length', '0')
+            self.end_headers()
         elif path in ('/install', '/install/') and config.STORE_PRODUCT_ID:  # Xbox Edge -> Microsoft Store listing
             pid = urllib.parse.quote(config.STORE_PRODUCT_ID, safe='')
             web = f"apps.microsoft.com/detail/{'restricted/' if config.STORE_PRIVATE else ''}{pid}"  # private listings 404 without restricted/

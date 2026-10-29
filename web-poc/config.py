@@ -67,7 +67,6 @@ DATA_DIR = Path(env('JELLYSHELL_DATA_DIR', '/data' if IN_DOCKER else str(HERE)))
 LOG_FILE = Path(env('JELLYSHELL_LOG_FILE', str(DATA_DIR / 'client.log'))).expanduser()
 STORE_PRODUCT_ID = env('STORE_PRODUCT_ID')
 STORE_PRIVATE = env('STORE_PRIVATE') == '1'  # Private-audience listing: web fallback is apps.microsoft.com/detail/restricted/<id>
-PRIVACY_CONTACT = env('PRIVACY_CONTACT')
 
 # ---------------- Jellyfin ----------------
 JELLYFIN_URL = url('JELLYFIN_URL', f'http://{LOCAL_HOST}:8096')

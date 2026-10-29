@@ -33,7 +33,6 @@ See [integrations.md](integrations.md).
 | `JELLYSHELL_DIST` | `web/dist` | Built UI to serve (rarely needed). |
 | `STORE_PRODUCT_ID` | — | Microsoft Store product id. When set, `/install` is a link page for the Xbox browser; otherwise `/install` doesn't exist. |
 | `STORE_PRIVATE` | `0` | `1` for a Private-audience listing: the web fallback link becomes `apps.microsoft.com/detail/restricted/<id>` (the plain URL 404s for private apps). |
-| `PRIVACY_CONTACT` | — | Email shown on `/privacy`. Unset: "contact the administrator of this server". |
 
 ### Jellyfin
 

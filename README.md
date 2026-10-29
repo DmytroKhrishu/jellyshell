@@ -198,4 +198,4 @@ size with a controller or a keyboard (arrows, Enter, Backspace = B).
 ## License
 
 [GPL-3.0](LICENSE). You may use, study, change and share JellyShell; if you distribute a modified version, it must stay
-open source under the same license. Third-party notices: [web/THIRD_PARTY.md](web/THIRD_PARTY.md).
+open source under the same license. Third-party notices: [web/THIRD_PARTY.md](web/THIRD_PARTY.md). Privacy policy: [docs/privacy.md](docs/privacy.md).
