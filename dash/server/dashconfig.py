@@ -81,7 +81,46 @@ IMMICH_URL = _opt('IMMICH_URL', 'immich_url').rstrip('/')
 IMMICH_API_KEY = _opt('IMMICH_API_KEY', 'immich_key')
 PUSH_TOKEN = _opt('DASH_PUSH_TOKEN', 'push_token')
 NP_URL = env('NP_URL', 'http://nowplaying:8102' if IN_DOCKER else 'http://127.0.0.1:8102').rstrip('/')  # compose service name
-DEBUG = env('DASH_DEBUG', '0').lower() in ('1', 'true', 'yes', 'on')
+_TRUE = ('1', 'true', 'yes', 'on')
+DEBUG = env('DASH_DEBUG', '0').lower() in _TRUE
+# Demo mode: every tab on, with clearly flagged sample data wherever a real source is missing (screenshots, UI work).
+DEMO = env('DASH_DEMO', '0').lower() in _TRUE
+# Server tab + tile: the host's /proc and the Docker socket. On by default wherever /proc exists; 0 hides them.
+SERVER_STATS = env('DASH_SERVER_STATS', '1').lower() in _TRUE and Path('/proc/stat').exists()
+
+
+def parse_ics_feeds(raw):
+    """CALENDAR_ICS_URLS -> [{name, color, url}].
+
+    Entries are separated by newlines or by ';' (a ';' inside a URL stays when no new entry follows it). Each entry is
+    `URL`, `Name|URL` or `Name|#hex|URL`; `webcal://` means `https://`. Entries without an http(s)/webcal URL are dropped.
+    """
+    out = []
+    entry_start = r'\s*(?:[^|;\n]*\|){0,2}\s*(?:https?|webcals?)://'
+    for part in re.split(r'\n|;(?=' + entry_start + ')', raw or ''):
+        bits = [b.strip() for b in part.strip().split('|')]
+        if len(bits) > 3:
+            bits = [bits[0], bits[1], '|'.join(bits[2:])]
+        url = bits[-1]
+        name = bits[0] if len(bits) >= 2 else ''
+        color = bits[1] if len(bits) == 3 else ''
+        url = re.sub(r'^webcals?://', 'https://', url, flags=re.I)
+        if not re.match(r'https?://[^/\s]+', url, re.I):
+            continue
+        if not re.fullmatch(r'#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3}', color):
+            color = ''
+        out.append({'name': name, 'color': color.upper(), 'url': url})
+    return out
+
+
+ICS_FEEDS = parse_ics_feeds(os.environ.get('CALENDAR_ICS_URLS', ''))
+ICS_REFRESH_MIN = max(5, int(_float(env('CALENDAR_ICS_REFRESH', '15')) or 15))
+
+
+def url_host(url):
+    """Only the host of a feed URL (the rest is a secret): for logs and status."""
+    m = re.match(r'[a-z]+://([^/?#@]*@)?([^/?#:]+)', url or '', re.I)
+    return m.group(2) if m else '?'
 
 
 def _disks():
@@ -136,6 +175,10 @@ def push_configured():
     return bool(PUSH_TOKEN)
 
 
+def ics_configured():
+    return bool(ICS_FEEDS)
+
+
 def server_timezone():
     """IANA zone of the household clock: DASH_TZ, JELLYSHELL_TZ, TZ, /etc/timezone, /etc/localtime, else UTC."""
     tz = env('DASH_TZ') or env('JELLYSHELL_TZ') or env('TZ').lstrip(':')
@@ -158,5 +201,8 @@ def hostname():
 
 
 def summary():
-    on = [n for n, ok in (('weather', weather_configured()), ('photos', photos_configured()), ('push', push_configured())) if ok]
+    on = [n for n, ok in (('weather', weather_configured()), ('photos', photos_configured()), ('push', push_configured()),
+                          ('nowplaying', nowplaying_configured()), ('server', SERVER_STATS), ('demo', DEMO)) if ok]
+    if ICS_FEEDS:
+        on.append(f"ics({','.join(url_host(f['url']) for f in ICS_FEEDS)})")
     return f"integrations={','.join(on) or 'none'} disks={DISKS} net={NET_IF} tz={server_timezone()} data={DATA_DIR}"

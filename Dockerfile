@@ -47,7 +47,7 @@ CMD ["python3", "/app/web-poc/server.py"]
 # ---------------------------------------------------------------- dash
 FROM py-base AS dash
 WORKDIR /app/dash/server
-COPY dash/server/server.py dash/server/dashconfig.py /app/dash/server/
+COPY dash/server/server.py dash/server/dashconfig.py dash/server/ics.py /app/dash/server/
 COPY --from=dash-build /src/dash/web/dist /app/dash/web/dist
 ENV DASH_BIND=0.0.0.0 DASH_PORT=8098 DASH_DATA_DIR=/data
 USER jellyshell

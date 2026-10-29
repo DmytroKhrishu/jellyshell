@@ -4,9 +4,10 @@ Apple-TV-style home dashboard. One web app served from your home server; runs in
 now, later inside the JellyShell UWP/WebView2 shell on the Xbox (same focus engine + input).
 
 ## Hard constraints
-- Calendar + Apple Home go **through the Mac**.
+- Author's setup: Calendar + Apple Home go **through the Mac**.
   Work calendar must NOT be configured on the server. The Mac pushes snapshots; the server never
-  holds Google/iCloud creds.
+  holds Google/iCloud creds. (Later: other self-hosters can instead give the server private ICS
+  links, `CALENDAR_ICS_URLS`. Both can run at once; each tile hides when it has no source.)
 - UI language = JellyShell (theme tokens, Inter, glass tab bar, white focus fill, Ken Burns).
 
 ## Tabs
@@ -34,7 +35,7 @@ Public transport, Jellyfin/Seerr tiles (separate app), Apple Reminders, news.
 - `server/server.py` — stdlib Python, binds DASH_BIND:DASH_PORT (default 0.0.0.0:8098). Proxies Open-Meteo (cached),
   Immich (API key server-side), samples /proc + /sys + cgroups every 5 s into ring buffers.
   `/api/push/{calendar,home}` accepts snapshots from the Mac (bearer token DASH_PUSH_TOKEN, see
-  docs/configuration.md). Until the Mac pushes, endpoints return clearly-flagged mock data.
+  docs/configuration.md). Until something pushes, Calendar and Home are hidden (DASH_DEMO=1 shows flagged mock data).
 - `web/` — Vite + Preact + signals; `lib/focus.ts`, `lib/input.ts` copied from JellyShell.
 - Mac agent (later): launchd LaunchAgent in the GUI session (TCC prompts work there, not over
   SSH) running `ical` + `homeclaw-cli`, POSTing JSON every 60 s.

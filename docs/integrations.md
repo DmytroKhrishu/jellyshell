@@ -1,9 +1,9 @@
 # Swapping integrations
 
 JellyShell and its dashboard talk to a handful of services: Seerr, Sonarr/Radarr, qBittorrent, Bazarr on the media side,
-and Open-Meteo, Immich, a Mac agent (Calendar + Apple Home) and a HomePod sidecar on the Dash side. They are what the
-author runs. If you run something else (Transmission instead of qBittorrent, Home Assistant instead of Apple Home,
-Google Calendar, PhotoPrism, Sonos, ...), this page shows where each one is wired in and how to replace it.
+and Open-Meteo, ICS calendar feeds, Immich, a Mac agent (Calendar + Apple Home) and a HomePod sidecar on the Dash
+side. They are what the author runs. If you run something else (Transmission instead of qBittorrent, Home Assistant
+instead of Apple Home, PhotoPrism, Sonos, ...), this page shows where each one is wired in and how to replace it.
 
 Every integration follows the same pattern, so a swap is usually one function on the server:
 
@@ -12,8 +12,9 @@ Every integration follows the same pattern, so a swap is usually one function on
 2. **Each feature has one JSON shape** (listed below). Keep the shape, change where the data comes from, and the UI
    doesn't need to change.
 3. **Every integration can be off.** Unset = the route answers `503 {"error": "... not configured"}` (or
-   `{"configured": false}` on the Dash) and the UI hides the feature. A feature you don't want needs no code change: leave its
-   variables empty ([configuration.md](configuration.md)).
+   `{"configured": false}` on the Dash) and the UI hides the feature. On the Dash, `features()` in `server.py` decides
+   which tabs and Overview tiles exist, and the UI drops the rest. A feature you don't want needs no code change: leave
+   its variables empty ([configuration.md](configuration.md)).
 4. **Push beats pull for things on other machines.** Calendar and Home are pushed to the Dash with a bearer token, so
    any script, on any OS, in any language, can feed them.
 
@@ -22,7 +23,8 @@ Every integration follows the same pattern, so a swap is usually one function on
 If someone asks you to "make the Dash use X instead of Y": find Y's row below, open the listed server function, and
 reimplement it against X so it returns exactly the documented shape (field names, units, types). Add X's settings as env
 variables in that program's config module (`web-poc/config.py` or `dash/server/dashconfig.py`), with an "is configured"
-check that makes the route return the existing not-configured answer, and document them in `.env.example` and
+check that makes the route return the existing not-configured answer (on the Dash, also add it to `features()` so the
+tab and tile hide), and document them in `.env.example` and
 `docs/configuration.md`. Don't touch the web UI unless X can't supply a field. Then mark the field optional in the UI,
 because the original provider still has to work. Keep the server programs stdlib-only Python (a provider that needs a
 pip package gets its own sidecar, like `dash/server/nowplaying.py`). Verify with `curl` against the route and in the
@@ -62,18 +64,29 @@ their JSON (see the functions' return values). If you don't use Bazarr, leave it
 
 ## Dashboard (`dash/server/server.py`)
 
-| Tile / page | Provider today | Server code | Route |
+The Dash is optional, and each tile is too: a source with no provider has no tab and no Overview tile (`features()`).
+The table lists the built-in providers. The macOS agent and the HomePod sidecar are the author's setup, included as
+example providers; nothing else depends on them.
+
+| Tile / page | Provider | Server code | Route |
 |---|---|---|---|
 | Weather | Open-Meteo (no key) | `weather()` | `GET /api/weather` |
 | Photos, memories, ambient slideshow | Immich | `photos()`, `immich_image()` | `GET /api/photos`, `GET /api/photo/<id>?size=thumbnail\|preview` |
-| Calendar | pushed (author: macOS agent reading EventKit) | `load_push('calendar')` | `POST /api/push/calendar` in, `GET /api/calendar` out |
-| Home (lights, sensors, scenes) | pushed (author: macOS agent + HomeClaw for Apple Home) | `normalize_home()`, `HOME_QUEUE` | `POST /api/push/home` in, `GET /api/home` out, commands via `GET /api/home/commands` |
-| Now playing | HomePod / Apple TV via the pyatv sidecar | `nowplaying()`, `np_cmd()` → `dash/server/nowplaying.py` | `GET /api/nowplaying`, `POST /api/nowplaying/cmd` |
+| Calendar | ICS feeds (`CALENDAR_ICS_URLS`) and/or pushes (author: `dash/mac-agent`, reading the Mac's calendars) | `IcsFeeds`, `ics.py`, `calendar_data()` | `POST /api/push/calendar` in, `GET /api/calendar` out |
+| Home (lights, sensors, scenes) | pushed (author: `dash/mac-agent` + HomeClaw for Apple Home) | `normalize_home()`, `HOME_QUEUE` | `POST /api/push/home` in, `GET /api/home` out, commands via `GET /api/home/commands` |
+| Now playing | a sidecar (author: HomePod via pyatv, `dash/server/nowplaying.py`) | `nowplaying()`, `np_cmd()` | `GET /api/nowplaying`, `POST /api/nowplaying/cmd` |
 | Server stats | the host itself (`/proc`, Docker socket) | `Metrics` | `GET /api/server` |
 | Backdrops | Wikimedia Commons featured landscapes | `sync_backdrops()` | `GET /api/backdrops` |
 
-**Calendar (any source, no code change).** Anything that can POST JSON can feed it: a cron job reading an ICS/CalDAV
-feed, a Google Calendar script, a phone shortcut. Set `DASH_PUSH_TOKEN` and push the next ~8 days every minute or so:
+**Calendar: ICS feeds (no agent, no code).** Google Calendar, iCloud, Outlook.com, Nextcloud and Fastmail all publish
+a private iCalendar link. Put the links in `CALENDAR_ICS_URLS` and the Dash server downloads, expands and shows them;
+how to get each link is in [configuration.md](configuration.md#calendar-feeds-calendar_ics_urls). The links are
+secrets (anyone with one can read the calendar), so they live in your `.env` only.
+
+**Calendar: pushes (any source).** When a calendar has no shareable link (some Google Workspace admins turn it off) or
+you'd rather not keep the link on the server, push events instead. The author's Mac agent does this from the Mac's own
+calendar store, so work calendars never touch the server. Anything that can POST JSON works: a script, a phone
+shortcut. Set `DASH_PUSH_TOKEN` and push the next ~8 days every minute or so:
 
 ```sh
 curl -X POST http://<dash-host>:8098/api/push/calendar \
@@ -84,7 +97,8 @@ curl -X POST http://<dash-host>:8098/api/push/calendar \
 ```
 
 `start`/`end` are ISO 8601 with an offset. All-day events are local midnight to midnight with `"allDay": true`. A
-newer push replaces the whole list.
+newer push replaces the whole list of pushed events. ICS and pushed events are shown together; an event that comes
+from both (same title, start and calendar) is shown once.
 
 **Home (Home Assistant, openHAB, Homey, ...).** The push endpoint runs `normalize_home()`, which currently expects
 HomeClaw's `list --json` / `scenes --json` output. Either send that format, or (cleaner) change `normalize_home()` to
@@ -102,7 +116,7 @@ accept already-normalized data. The UI wants:
 Taps in the UI are queued as commands for your agent to run. The agent polls `GET /api/home/commands` (same bearer
 token) and gets `[{"op": "trigger", "scene": "<id>"}, {"op": "set", "id": "<id>", "characteristic": "power|brightness",
 "value": ...}]`. A Home Assistant agent maps those to `scene.turn_on` / `light.turn_on` service calls, then pushes fresh
-state. `dash/mac-agent/main.swift` is the reference agent (about 170 lines).
+state. `dash/mac-agent/main.swift` is the reference agent (about 170 lines). The Home tab appears after the first push.
 
 **Weather.** The UI reads Open-Meteo's field names (`current.temperature_2m`, `current.weather_code` as WMO codes,
 `hourly.*`, `daily.*`, `minutely_15.precipitation`, optional `air.european_aqi`). For another provider, make `weather()`

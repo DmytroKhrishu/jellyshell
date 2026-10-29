@@ -77,15 +77,34 @@ URLs are the apps' base URLs (`http://seerr:5055`, not `.../api/v1`; an `/api/..
 
 ## Dashboard (`dash/server/server.py`)
 
+The whole Dash is optional, and so is every tile in it. A source that isn't configured has no tab and no Overview
+tile; with nothing configured the Dash is a clock (plus server stats, which are on by default). Which sources are on is
+decided in one place, `features()` in `dash/server/server.py`, and reported by `GET /api/config` (below).
+
+| Tab / tile | On when |
+|---|---|
+| Weather | `DASH_LAT` and `DASH_LON` are set |
+| Calendar | `CALENDAR_ICS_URLS` is set, or `DASH_PUSH_TOKEN` is set and a calendar push has arrived |
+| Home | `DASH_PUSH_TOKEN` is set and a home push has arrived |
+| Photos | `IMMICH_URL` and `IMMICH_API_KEY` are set |
+| Music / now playing | `NP_DEVICE_ID` or `NP_URL` is set (the now-playing sidecar) |
+| Server | `DASH_SERVER_STATS` is on (default) and `/proc` exists |
+
+A tab that depends on a push appears by itself within a minute of the first push, no reload needed.
+
 | Variable | Default | What it does |
 |---|---|---|
 | `DASH_BIND`, `DASH_PORT` | `0.0.0.0`, `8098` | Listener. |
 | `DASH_DATA_DIR` | `dash/server/state/` (Docker: `/data`) | Pushed snapshots, settings, cached backdrops. |
 | `DASH_LOG_FILE` | `$DASH_DATA_DIR/client.log` | Client log lines. |
-| `DASH_LAT`, `DASH_LON` | — | Weather location (Open-Meteo, no key). Unset: `/api/weather` → `503 {"configured": false}`, the Weather page says so, Overview hides the tile content. |
+| `DASH_LAT`, `DASH_LON` | — | Weather location (Open-Meteo, no key). Unset: no Weather tab or tile, `/api/weather` → `503 {"configured": false}`. |
 | `DASH_PLACE` | weather zone's city | Place name shown next to the weather. |
-| `IMMICH_URL`, `IMMICH_API_KEY` | — | Photos (memories, favorites, ambient slideshow). Unset: photos off (`503 {"configured": false}`). |
-| `DASH_PUSH_TOKEN` | — | Bearer token for the Mac agent (`dash/mac-agent`) pushing Calendar + Home snapshots. Unset: push/command endpoints answer 503 and Calendar/Home show clearly flagged sample data. |
+| `CALENDAR_ICS_URLS` | — | Calendar feeds, see [Calendar feeds](#calendar-feeds-calendar_ics_urls). **Private: the URLs are passwords.** |
+| `CALENDAR_ICS_REFRESH` | `15` | Minutes between feed downloads (minimum 5). |
+| `IMMICH_URL`, `IMMICH_API_KEY` | — | Photos (memories, favorites, ambient slideshow). Unset: no Photos tab or tile. |
+| `DASH_PUSH_TOKEN` | — | Bearer token for agents that push Calendar and Home snapshots (`POST /api/push/calendar\|home`, see [integrations](integrations.md#dashboard-dashserverserverpy)). The author's agent is `dash/mac-agent`. Unset: push and command endpoints answer 503. |
+| `DASH_SERVER_STATS` | `1` | `0` hides the Server tab and tile (`/api/server` answers 503). |
+| `DASH_DEMO` | `0` | `1` turns every tab on and fills each source that isn't configured with clearly flagged sample data. For screenshots and UI work. |
 | `DASH_DISKS` | `System=/` | Server tab disks: `Label=/path;Label2=/path2`. |
 | `DASH_NET_IF` | auto | Network interface for the traffic graph (default: busiest non-loopback, non-container interface). |
 | `DASH_HOSTNAME` | system hostname | Name shown on the Server tab. |
@@ -95,15 +114,55 @@ URLs are the apps' base URLs (`http://seerr:5055`, not `.../api/v1`; an `/api/..
 | `DASH_DEBUG` | `0` | `1` accepts `POST /api/cmd` (remote debug key queue). |
 | `NP_URL` | `http://127.0.0.1:8102` (Docker: `http://nowplaying:8102`) | Where the dash finds the now-playing sidecar. |
 
-`GET /api/config` on the dash returns `{timeZone?, serverTimeMs, configured: {weather, photos, push, nowplaying, calendar, home}}`.
+`GET /api/config` on the dash returns `{timeZone?, serverTimeMs, demo, features: {calendar, home, photos, music, weather,
+server}, configured: {weather, photos, push, nowplaying, calendar, ics, home}}`. The UI reads `features` at boot and
+every minute after; `configured` is the raw per-setting view.
+
+### Calendar feeds (`CALENDAR_ICS_URLS`)
+
+The Dash server downloads each feed every `CALENDAR_ICS_REFRESH` minutes (with `ETag` / `If-Modified-Since`, 25 s
+timeout), expands repeating events for the days it shows, and serves them from `GET /api/calendar` together with any
+pushed events (identical title + start + calendar are shown once). A feed that fails keeps its last good copy, so one
+broken link never empties the calendar. Only the host of each feed is ever logged.
+
+One entry per line or `;`-separated, each `URL`, `Name|URL` or `Name|#rrggbb|URL`. The name and colour override what
+the feed announces (`X-WR-CALNAME`, `X-APPLE-CALENDAR-COLOR`). `webcal://` links work as they are. In an `.env` file use
+`;` (one line); in compose `environment:` or systemd a multi-line value works too.
+
+```sh
+CALENDAR_ICS_URLS=Personal|#1BADF8|https://calendar.google.com/calendar/ical/.../basic.ics;Family|#FF2968|webcal://p..-caldav.icloud.com/published/2/...
+```
+
+These links are secrets: anyone who has one can read that calendar. Keep them in your `.env`, never in a repo.
+
+Where to get the link:
+
+- **Google Calendar**: on a computer, open Google Calendar, then Settings (gear) → Settings. Under "Settings for my
+  calendars" click the calendar, then **Integrate calendar**, and copy **Secret address in iCal format**. Do this per
+  calendar. Google Workspace (work or school) admins can turn this off; if there is no secret address, feed that calendar
+  with a push agent instead (for example the author's Mac agent, which reads every calendar the Mac has).
+- **iCloud**: at icloud.com/calendar, hold the pointer over the calendar, click the info button, turn on **Public
+  Calendar** and click **Copy**. (Calendar on a Mac: the Share Calendar button next to the calendar, then Public
+  Calendar.) A public calendar is readable by anyone who has the link.
+- **Outlook.com**: Settings → Calendar → **Shared calendars**. Under **Publish a calendar** pick the calendar and the
+  detail level, click **Publish**, and copy the **ICS** link (not the HTML one).
+
+Supported: all-day and timed events, time zones (IANA and the Windows names Outlook uses), repeating events (daily,
+weekly, monthly, yearly with interval, count, until, weekdays such as "first Monday" or "last Friday", month days, set
+positions), excluded dates, moved or edited single instances, and cancelled events. Rare rule parts (hourly repeats,
+`BYHOUR`, week numbers) show the first instance only and are logged once. The parser is `dash/server/ics.py` (stdlib
+only); its tests run with `python3 -m unittest discover -s dash/server -p 'test_*.py'`.
 
 ### Now-playing sidecar (`dash/server/nowplaying.py`, optional)
+
+The author's setup: a HomePod. Any other player works through a small sidecar with the same three endpoints
+([integrations](integrations.md#dashboard-dashserverserverpy)).
 
 Needs `pyatv` + `aiohttp` ([`dash/server/requirements-nowplaying.txt`](../dash/server/requirements-nowplaying.txt)).
 
 | Variable | Default | What it does |
 |---|---|---|
-| `NP_DEVICE_ID` | — (required) | HomePod / Apple TV identifier from `atvremote scan`. Unset: the sidecar exits with a message, the dash shows "Now playing isn't set up". |
+| `NP_DEVICE_ID` | — (required) | HomePod / Apple TV identifier from `atvremote scan`. Unset: the sidecar exits with a message, and the dash (with no `NP_URL` either) has no Music tab or now-playing tile. |
 | `NP_DEVICE_NAME` | the name the device announces | Label in the dash. |
 | `NP_HOST` | — | Optional IP hint for a fast first connect (falls back to a multicast scan). |
 | `NP_BIND`, `NP_PORT` | `127.0.0.1`, `8102` (Docker: `0.0.0.0`) | Sidecar listener. |

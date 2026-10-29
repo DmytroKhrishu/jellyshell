@@ -243,6 +243,35 @@ html.tab-overview .clock { display: none; }
 .page.fit .hero-weather { margin-top: 0.6rem; }
 .page.fit .grid.overview { flex: 1 1 0; min-height: 0; grid-template-rows: 1fr 1fr; grid-auto-rows: 0; }
 .page.fit .grid.overview > .tile { min-height: 0; padding: 1.4rem 1.6rem; gap: 0.8rem; }
+/* tiles without a data source are left out (server features); the grid follows what's left.
+   ov-cN: calendar (tall left column) + N small tiles. ov-sN: no calendar, N small tiles. */
+.grid.overview.ov-c0 { grid-template-columns: 1fr; }
+.grid.overview.ov-c1, .grid.overview.ov-c2 { grid-template-columns: 1.25fr 2fr; }
+.grid.overview.ov-c1 > .tile:not(.tile-cal) { grid-row: span 2; }
+.grid.overview.ov-c3 > .tile:last-child { grid-column: span 2; }
+.grid.overview.ov-s4 { grid-template-columns: 1fr 1fr; }
+.grid.overview.ov-s1 { grid-template-columns: 1fr; }
+.grid.overview.ov-s2 { grid-template-columns: 1fr 1fr; }
+.grid.overview.ov-s3 { grid-template-columns: repeat(3, 1fr); }
+/* few tiles: one row under a bigger clock, instead of half-empty tall tiles */
+.page.fit .ov-sparse .hero-row { flex: 1 1 0; min-height: 0; align-items: center; }
+.page.fit .ov-sparse .hero-time { font-size: 9rem; }
+.page.fit .ov-sparse .hero-date { font-size: 2rem; }
+.page.fit .ov-sparse .hero-weather { font-size: 1.8rem; }
+.page.fit .ov-sparse .grid.overview { flex: 0 0 auto; height: auto; grid-template-rows: auto; }
+.page.fit .ov-sparse .grid.overview > .tile { padding: 1.6rem 1.8rem; gap: 1.2rem; }
+.ov-sparse .wx-h { font-size: 1.5rem; }
+.ov-sparse .wx-sun, .ov-sparse .dbar-row { font-size: 1.2rem; }
+.ov-sparse .srv-mini .spark { height: 3.6rem !important; }
+.page.fit .ov-s0 .hero-row { justify-content: center; text-align: center; }
+.page.fit .ov-s0 .hero { flex: 0 1 auto; }
+.page.fit .ov-s0 .hero-weather { justify-content: center; }
+.page.fit .ov-s0 .hero-time { font-size: 13rem; }
+.page.fit .ov-s0 .hero-date { font-size: 2.6rem; }
+.page.fit .ov-s0 .hero-weather { font-size: 2.2rem; }
+.wx-days { display: flex; flex-direction: column; gap: 0.25rem; margin-top: auto; }
+.wx-day { display: grid; grid-template-columns: 1fr 2.4rem 3.2rem 3rem; align-items: center; gap: 0.8rem; font-size: 1.25rem; padding: 0.35rem 0; border-top: 1px solid rgba(255,255,255,.07); }
+.wx-day .dim:last-child { text-align: right; }
 
 /* weather: hero with the "now" stats on its right, chart flexes into the leftover height */
 .wx-page .wx-hero { margin-bottom: 1.6rem; }

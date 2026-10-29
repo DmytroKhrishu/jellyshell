@@ -1,14 +1,15 @@
 """JellyShell Dash backend — stdlib only.
 
 Serves web/dist, proxies Open-Meteo + Immich (key stays here), samples host + Docker metrics into
-ring buffers, and accepts calendar/home snapshots pushed by the Mac agent.
+ring buffers, reads ICS calendar feeds, and accepts calendar/home snapshots pushed by an agent (e.g. dash/mac-agent).
 
-Configuration: DASH_* / IMMICH_* / NP_* environment variables or the repo-root .env (dashconfig.py,
+Configuration: DASH_* / IMMICH_* / NP_* / CALENDAR_* environment variables or the repo-root .env (dashconfig.py,
 docs/configuration.md). Every integration is optional: weather needs DASH_LAT/DASH_LON, photos IMMICH_URL +
-IMMICH_API_KEY, the Mac agent DASH_PUSH_TOKEN. Missing ones answer 503 {"configured": false}.
+IMMICH_API_KEY, the calendar CALENDAR_ICS_URLS and/or pushes, pushes DASH_PUSH_TOKEN. Missing ones answer
+503 {"configured": false}, and GET /api/config `features` tells the UI which tabs and tiles to show.
 
-Mac-sourced data is never fetched from here: the Mac POSTs to /api/push/<kind> with
-`Authorization: Bearer <DASH_PUSH_TOKEN>`. Until it does, those endpoints serve clearly-flagged mock data.
+Pushed data is never fetched from here: the agent POSTs to /api/push/<kind> with
+`Authorization: Bearer <DASH_PUSH_TOKEN>`. DASH_DEMO=1 fills every missing source with clearly flagged sample data.
 """
 import http.client
 import json
@@ -23,11 +24,13 @@ import urllib.parse
 import urllib.request
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import dashconfig as C
+import ics
 
 ROOT = Path(__file__).resolve().parent
 DIST = Path(C.env('DASH_DIST', str(ROOT.parent / 'web' / 'dist')))
@@ -75,6 +78,8 @@ def get_json(url, headers=None, data=None, timeout=10):
 # ---------------------------------------------------------------- weather
 def weather():
     if not C.weather_configured():
+        if C.DEMO:
+            return demo_weather()
         raise NotConfigured('weather not configured (set DASH_LAT and DASH_LON)')
     lat, lon = C.LAT, C.LON
     q = urllib.parse.urlencode({
@@ -195,7 +200,18 @@ def is_photo(a, junk):
     return True
 
 
+def demo_photos():
+    """DASH_DEMO without Immich: the cached landscape backdrops stand in for photos (ids `demo-<file>`)."""
+    bg = backdrops()
+    if not bg:
+        raise NotConfigured('demo photos need the backdrop cache (DASH_BACKDROPS > 0); it fills within a few minutes')
+    ph = [{'id': 'demo-' + b['file'], 'taken': None, 'place': b['name'], 'w': 2560, 'h': 1440} for b in bg]
+    return {'mock': True, 'memories': [{'title': '3 years ago', 'assets': ph[:12]}], 'favorites': ph[12:40], 'random': ph[40:100]}
+
+
 def photos():
+    if not C.photos_configured() and C.DEMO:
+        return demo_photos()
     today = datetime.now().strftime('%Y-%m-%d')
     cutoff = (datetime.now() - timedelta(days=365 * MAX_AGE_YEARS)).strftime('%Y-%m-%dT00:00:00Z')
     junk = junk_ids()
@@ -312,6 +328,10 @@ threading.Thread(target=_warm_junk, daemon=True).start()
 
 
 def immich_image(asset_id, size):
+    if asset_id.startswith('demo-') and C.DEMO and not C.photos_configured():
+        f = (BG_DIR / asset_id[5:]).resolve()
+        if f.parent == BG_DIR.resolve() and f.is_file():
+            return f.read_bytes(), 'image/jpeg'
     if not C.photos_configured():
         raise NotConfigured('photos not configured (set IMMICH_URL and IMMICH_API_KEY)')
     size = 'preview' if size not in ('thumbnail', 'preview') else size
@@ -457,12 +477,180 @@ class Metrics:
         }
 
 
-# ---------------------------------------------------------------- Mac-pushed snapshots
+# ---------------------------------------------------------------- pushed snapshots (any agent; the author's is dash/mac-agent)
 def load_push(kind):
     p = STATE / f'{kind}.json'
     if p.exists():
         return json.loads(p.read_text())
     return None
+
+
+def calendar_label(c):
+    """Google primary calendars are named after the account: 'me@gmail.com' -> 'Personal', 'me@acme.com' -> 'Acme'."""
+    if '@' in (c or ''):
+        dom = c.split('@', 1)[1]
+        return 'Personal' if dom in ('gmail.com', 'googlemail.com', 'icloud.com', 'me.com') else dom.split('.')[0].title()
+    return c
+
+
+def household_tz():
+    """Zone for all-day events and floating times: DASH_TZ / TZ / host zone, else (UTC default) the weather location's."""
+    tz = C.server_timezone()
+    if tz in ('UTC', 'Etc/UTC', 'Etc/Universal', 'Universal') and not (C.env('DASH_TZ') or C.env('JELLYSHELL_TZ') or C.env('TZ')):
+        hit = _cache.get('weather')
+        tz = (hit[1].get('timezone') if hit else None) or tz
+    try:
+        return ZoneInfo(tz)
+    except Exception:  # noqa: BLE001
+        return timezone.utc
+
+
+# ---------------------------------------------------------------- ICS calendar feeds (CALENDAR_ICS_URLS)
+ICS_MAX_BYTES = 15 * 1024 * 1024
+
+
+class IcsFeeds:
+    """Polls every feed in the background. Each feed keeps its last good copy, so one broken feed never empties the
+    calendar. Feed URLs are secrets (Google's "secret address", iCloud public links): only the host is ever logged."""
+
+    def __init__(self, feeds):
+        self.feeds = [dict(f, host=C.url_host(f['url']), cal=None, etag=None, modified=None, ok_at=None, error=None, tried_at=None)
+                      for f in feeds]
+        self.lock = threading.Lock()
+        self.rev = 0
+        if self.feeds:
+            threading.Thread(target=self._loop, daemon=True).start()
+
+    def _fetch(self, f):
+        h = {'User-Agent': UA['User-Agent'], 'Accept': 'text/calendar, */*;q=0.5'}
+        if f['etag']:
+            h['If-None-Match'] = f['etag']
+        if f['modified']:
+            h['If-Modified-Since'] = f['modified']
+        try:
+            with urllib.request.urlopen(urllib.request.Request(f['url'], headers=h), timeout=25) as r:
+                body = r.read(ICS_MAX_BYTES + 1)
+                if len(body) > ICS_MAX_BYTES:
+                    raise ValueError('feed larger than 15 MB')
+                etag, modified = r.headers.get('ETag'), r.headers.get('Last-Modified')
+        except urllib.error.HTTPError as e:
+            if e.code == 304:
+                return None
+            raise ValueError(f'HTTP {e.code}') from None
+        except urllib.error.URLError as e:
+            raise ValueError(f'unreachable ({type(e.reason).__name__})') from None
+        text = body.decode('utf-8', errors='replace')
+        if 'BEGIN:VCALENDAR' not in text[:4096].upper():
+            raise ValueError('not an iCalendar feed (wrong link, or the calendar is not shared)')
+        return ics.parse(text), etag, modified
+
+    def refresh(self):
+        changed = False
+        for f in self.feeds:
+            try:
+                got = self._fetch(f)
+                with self.lock:
+                    f['tried_at'] = time.time()
+                    f['ok_at'], f['error'] = time.time(), None
+                    if got:
+                        f['cal'], f['etag'], f['modified'] = got
+                        changed = True
+                if got:
+                    print(f"ics: {f['host']}: {len(got[0].events)} VEVENTs", flush=True)
+            except Exception as e:  # noqa: BLE001 — one feed failing must not stop the others
+                msg = str(e).replace(f['url'], f['host'])[:200]
+                with self.lock:
+                    f['tried_at'], f['error'] = time.time(), msg
+                print(f"ics: {f['host']}: {msg} (keeping the last good copy)" if f['cal'] else f"ics: {f['host']}: {msg}", flush=True)
+        if changed:
+            with self.lock:
+                self.rev += 1
+
+    def _loop(self):
+        while True:
+            self.refresh()
+            time.sleep(C.ICS_REFRESH_MIN * 60)
+
+    def status(self):
+        with self.lock:
+            return [{'name': f['name'] or (calendar_label(f['cal'].name) if f['cal'] else '') or f['host'], 'host': f['host'],
+                     'ok': f['cal'] is not None and not f['error'], 'error': f['error'], 'updatedAt': f['ok_at'],
+                     'loaded': f['cal'] is not None} for f in self.feeds]
+
+    def events(self):
+        """Instances from 8 days back to 9 days ahead (household zone), cached per (feed revision, day)."""
+        tz = household_tz()
+        today = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+        key = (self.rev, today.isoformat(), str(tz))
+        hit = _cache.get('ics-expanded')
+        if hit and hit[1][0] == key:
+            return hit[1][1]
+        with self.lock:
+            cals = [(f['cal'], f['name'], f['color'], f['host']) for f in self.feeds if f['cal'] is not None]
+        out = []
+        for cal, name, color, host in cals:
+            try:
+                out += ics.expand(cal, today - timedelta(days=8), today + timedelta(days=9), tz,
+                                  name=name or calendar_label(cal.name), color=color)
+            except Exception as e:  # noqa: BLE001
+                print(f'ics: {host}: expand failed: {e}', flush=True)
+        _cache['ics-expanded'] = (time.time(), (key, out))
+        return out
+
+
+ICS = IcsFeeds(C.ICS_FEEDS)
+
+
+def _instant(s):
+    try:
+        return datetime.fromisoformat(s.replace('Z', '+00:00')).timestamp()
+    except (AttributeError, ValueError):
+        return s
+
+
+def calendar_data():
+    """GET /api/calendar: pushed events + ICS feed events, identical title+start+calendar deduped."""
+    pushed = load_push('calendar') if C.push_configured() or C.DEMO else None
+    feeds = ICS.status()
+    if pushed is None and not feeds:
+        if C.DEMO:
+            return mock_calendar()
+        raise NotConfigured('calendar not configured (set CALENDAR_ICS_URLS, or push events with DASH_PUSH_TOKEN)')
+    events, seen = [], set()
+    for e in [*(dict(e, source=e.get('source') or 'push') for e in (pushed or {}).get('events', [])), *ICS.events()]:
+        k = (e.get('title'), _instant(e.get('start')), e.get('calendar'))
+        if k not in seen:
+            seen.add(k)
+            events.append(e)
+    stamps = [t for t in [(pushed or {}).get('updatedAt'), *(f['updatedAt'] for f in feeds)] if t]
+    return {'updatedAt': max(stamps) if stamps else time.time(), 'events': events,
+            'sources': {'push': {'updatedAt': pushed.get('updatedAt')} if pushed else None, 'ics': feeds}}
+
+
+def demo_weather():
+    """DASH_DEMO without DASH_LAT/LON: a plausible Open-Meteo-shaped forecast (flagged mock) in the household zone."""
+    import math
+    tz = household_tz()
+    now = datetime.now(tz).replace(tzinfo=None)
+    h0 = now.replace(minute=0, second=0, microsecond=0) - timedelta(hours=now.hour)
+    hours = [h0 + timedelta(hours=i) for i in range(7 * 24)]
+    temp = [round(9 + 5 * math.sin((t.hour - 9) / 24 * 2 * math.pi) + (t.day % 3), 1) for t in hours]
+    codes = [(0, 1, 2, 3, 61, 3, 2)[(t.day + t.hour // 6) % 7] for t in hours]
+    fmt = lambda t: t.strftime('%Y-%m-%dT%H:%M')  # noqa: E731
+    days = [h0 + timedelta(days=i) for i in range(7)]
+    q0 = now.replace(minute=now.minute // 15 * 15, second=0, microsecond=0)
+    i = now.hour
+    return {'mock': True, 'timezone': str(tz), 'place': 'Demo City', 'air': {'european_aqi': 24, 'pm2_5': 6.1},
+            'current': {'time': fmt(now.replace(second=0, microsecond=0)), 'temperature_2m': temp[i], 'apparent_temperature': temp[i] - 2,
+                        'relative_humidity_2m': 64, 'weather_code': codes[i], 'is_day': int(7 <= now.hour < 18), 'wind_speed_10m': 11, 'precipitation': 0},
+            'hourly': {'time': [fmt(t) for t in hours], 'temperature_2m': temp, 'weather_code': codes,
+                       'precipitation_probability': [60 if c == 61 else 10 for c in codes], 'is_day': [int(7 <= t.hour < 18) for t in hours]},
+            'minutely_15': {'time': [fmt(q0 + timedelta(minutes=15 * k)) for k in range(16)], 'precipitation': [0, 0, 0.1, 0.3, 0.2] + [0] * 11},
+            'daily': {'time': [d.strftime('%Y-%m-%d') for d in days], 'weather_code': [codes[k * 24 + 13] for k in range(7)],
+                      'temperature_2m_max': [max(temp[k * 24:(k + 1) * 24]) for k in range(7)],
+                      'temperature_2m_min': [min(temp[k * 24:(k + 1) * 24]) for k in range(7)],
+                      'sunrise': [fmt(d.replace(hour=6, minute=58)) for d in days], 'sunset': [fmt(d.replace(hour=16, minute=41)) for d in days],
+                      'uv_index_max': [2.1] * 7, 'precipitation_probability_max': [10, 60, 20, 10, 70, 30, 10]}}
 
 
 def mock_calendar():
@@ -571,7 +759,7 @@ def normalize_home(raw):
     home_name = next((s.get('home_name') for s in raw.get('scenes', []) if s.get('home_name')), 'Home')
     return {'home': home_name, 'scenes': scenes,
             'rooms': [{'name': r, 'accessories': rooms[r]} for r in sorted(rooms, key=lambda r: (r == 'Default Room', r))]}
-METRICS = Metrics()
+METRICS = Metrics() if C.SERVER_STATS else None
 
 
 # ---------------------------------------------------------------- HomePod now playing (pyatv sidecar)
@@ -592,6 +780,8 @@ def nowplaying(mock=''):
                 'can': {k: True for k in ('play_pause', 'next', 'previous', 'volume_up', 'volume_down')},
                 'artwork_url': f"/api/backdrop/{bg[0]['file']}" if bg else None}
     if not C.nowplaying_configured():
+        if C.DEMO:
+            return nowplaying('1')
         return {'available': False, 'configured': False, 'device': 'HomePod', 'device_state': 'idle',
                 'error': 'now playing not configured (set NP_DEVICE_ID for the sidecar, or NP_URL)'}
     try:
@@ -663,11 +853,16 @@ class H(BaseHTTPRequestHandler):
                     return self._json({'error': 'not found'}, 404)
                 return self._send(200, f.read_bytes(), 'image/jpeg', 'public, max-age=604800')
             if p == '/api/server':
+                if METRICS is None:
+                    raise NotConfigured('server stats off (DASH_SERVER_STATS=0)')
                 return self._json(METRICS.snapshot())
             if p == '/api/calendar':
-                return self._json(load_push('calendar') or mock_calendar())
+                return self._json(calendar_data())
             if p == '/api/home':
-                return self._json(load_push('home') or mock_home())
+                h = load_push('home') if C.push_configured() else None
+                if h is None and not C.DEMO:
+                    raise NotConfigured('home not configured (an agent pushes it with DASH_PUSH_TOKEN, e.g. dash/mac-agent)')
+                return self._json(h or mock_home())
             if p == '/api/nowplaying':
                 return self._json(nowplaying(q.get('mock', [''])[0]))
             if p == '/api/nowplaying/artwork':
@@ -715,10 +910,7 @@ class H(BaseHTTPRequestHandler):
                 data = normalize_home(data)
             else:
                 for e in data.get('events', []):
-                    c = e.get('calendar', '')
-                    if '@' in c:  # Google primary calendars are named after the account
-                        dom = c.split('@', 1)[1]
-                        e['calendar'] = 'Personal' if dom in ('gmail.com', 'icloud.com', 'me.com') else dom.split('.')[0].title()
+                    e['calendar'] = calendar_label(e.get('calendar', ''))
             data['updatedAt'] = time.time()
             (STATE / f"{p.rsplit('/', 1)[1]}.json").write_text(json.dumps(data))
             return self._json({'ok': True})
@@ -752,6 +944,30 @@ class H(BaseHTTPRequestHandler):
         return self._send(200, f.read_bytes(), MIME.get(f.suffix, 'application/octet-stream'), cache)
 
 
+def features():
+    """Which tabs / Overview tiles have a data source. The UI hides the rest (polled with /api/config, so a tab appears
+    once a first push arrives). One place decides this:
+
+    calendar  ICS feeds configured, or DASH_PUSH_TOKEN set and a calendar push received
+    home      DASH_PUSH_TOKEN set and a home push received (an agent has to send it)
+    photos    IMMICH_URL + IMMICH_API_KEY
+    music     now-playing sidecar configured (NP_DEVICE_ID or NP_URL)
+    weather   DASH_LAT + DASH_LON
+    server    host metrics on (DASH_SERVER_STATS, default 1 where /proc exists)
+    DASH_DEMO=1 turns every one on, with sample data where the source is missing.
+    """
+    push = C.push_configured()
+    f = {'calendar': C.ics_configured() or (push and (STATE / 'calendar.json').exists()),
+         'home': push and (STATE / 'home.json').exists(),
+         'photos': C.photos_configured(),
+         'music': C.nowplaying_configured(),
+         'weather': C.weather_configured(),
+         'server': METRICS is not None}
+    if C.DEMO:
+        f = {k: True if k != 'server' else v for k, v in f.items()}
+    return f
+
+
 def dash_config():
     """GET /api/config: household clock zone + which optional data sources are configured.
 
@@ -759,10 +975,10 @@ def dash_config():
     """
     tz = C.server_timezone()
     explicit = bool(C.env('DASH_TZ') or C.env('JELLYSHELL_TZ') or C.env('TZ'))
-    out = {'serverTimeMs': int(time.time() * 1000),
+    out = {'serverTimeMs': int(time.time() * 1000), 'features': features(), 'demo': C.DEMO,
            'configured': {'weather': C.weather_configured(), 'photos': C.photos_configured(),
                           'push': C.push_configured(), 'nowplaying': C.nowplaying_configured(), 'calendar': load_push('calendar') is not None,
-                          'home': load_push('home') is not None}}
+                          'ics': C.ics_configured(), 'home': load_push('home') is not None}}
     if explicit or tz not in ('UTC', 'Etc/UTC', 'Etc/Universal', 'Universal'):
         out['timeZone'] = tz
     return out
