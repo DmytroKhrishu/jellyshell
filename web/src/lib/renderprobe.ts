@@ -11,7 +11,7 @@
 // A new, large canvas every probe: Chromium keeps small canvases in software and drops a canvas to software after repeated
 // getImageData, either of which would hide the bug. Desktop test: ?probetest=1 (probe on), ?probetest=broken (fake a hit).
 import { isXbox } from './mode';
-import { playerActive } from './router';
+import { playbackActive } from './router'; // full screen OR picture-in-picture: never reload under a playing video
 import { log } from './log';
 
 const EVERY_MS = 15_000;
@@ -96,7 +96,7 @@ function gpuInfo() {
 }
 
 function recover(p: Probe) {
-  if (playerActive.value) {
+  if (playbackActive.value) {
     if (!pending) log('render probe: reload deferred (player)');
     pending = true;
     return;
@@ -146,7 +146,7 @@ if (isXbox || forced) {
   setTimeout(() => check('boot'), FIRST_MS);
   setInterval(() => !document.hidden && check('tick'), EVERY_MS);
   document.addEventListener('visibilitychange', () => !document.hidden && setTimeout(() => check('visible'), 1500));
-  playerActive.subscribe((on) => {
+  playbackActive.subscribe((on) => {
     if (!on && pending) setTimeout(() => check('after-player'), 1500);
   });
 }

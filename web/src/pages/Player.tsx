@@ -9,7 +9,10 @@ import { setBackdrop } from '../components/Backdrop';
 import { onNative, send, isNative } from '../lib/bridge';
 import { pushHandler, onRelease, ActionEvent, Action } from '../lib/input';
 import { focusEl, current, move } from '../lib/focus';
-import { pop, replaceTop } from '../lib/router';
+import { replacePlayer, replaceTop } from '../lib/router';
+import { pip, pipSupported, enterPip, closePlayback, pipFullScreen } from '../lib/pip';
+import { PipWindow } from '../components/PipWindow';
+import '../styles/pip.css';
 import {
   Session, getPlaybackInfo, streamUrl, buildPlayMsg, reportStart, reportProgress, reportStopped, mediaSegments, Segment,
   Cue, loadVtt, subtitleUrl, cuesAt,
@@ -88,6 +91,9 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   };
   const [, setTick] = useState(0);
   const root = useRef<HTMLDivElement>(null);
+  const inPip = pip.value; // picture-in-picture: no overlay, no player keys, the app is usable (lib/pip.ts)
+  const pipRef = useRef(inPip);
+  pipRef.current = inPip;
 
   // Mutable mirrors for event handlers.
   const r = useRef({ pos: 0, dur: 0, paused: false, ui: true, preview: null as number | null, sess: null as Session | null, lastInput: performance.now(), exiting: false, started: false, scrubTimer: 0 as number | undefined, osdTimer: 0 as number | undefined, keepMode: false });
@@ -103,11 +109,12 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
 
   // html.starting -> opaque page keeps the backdrop + "Starting…" until the first frame;
   // html.playing  -> transparent page so the native video shows through.
+  // PiP: neither (the pages stay opaque and usable; the video is moved into the PiP window instead).
   useEffect(() => {
     const h = document.documentElement.classList;
-    h.toggle('starting', starting);
-    h.toggle('playing', !starting);
-  }, [starting]);
+    h.toggle('starting', starting && !inPip);
+    h.toggle('playing', !starting && !inPip);
+  }, [starting, inPip]);
   useEffect(() => () => document.documentElement.classList.remove('playing', 'starting'), []);
   useEffect(() => {
     if (!starting) return setWakeHint(false);
@@ -190,7 +197,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
         if (cancelled) return;
         setIt(item);
         const bd = backdropUrl(item);
-        if (bd) setBackdrop(bd, 0.55, 0);
+        if (bd && !pip.peek()) setBackdrop(bd, 0.55, 0); // PiP next episode: the page under it keeps its backdrop
         const resumeMs = (item.UserData?.PlaybackPositionTicks ?? 0) / TICKS_PER_MS;
         const startMs = fromStart ? 0 : startOverride ?? resumeMs;
         const t = pickTracks(item);
@@ -411,7 +418,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   const exit = () => {
     if (r.current.exiting) return;
     r.current.exiting = true;
-    pop(); // unmount sends stop + reports position
+    closePlayback('exit'); // pops the player route (or closes PiP); unmount sends stop + reports position
   };
 
   /** Autoplay into the next episode (file end, or the credits countdown while the credits still play). */
@@ -433,7 +440,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     r.current.keepMode = true;
     send({ type: 'stop' });
     setShowEps(false);
-    replaceTop({ name: 'player', id: n.Id });
+    replacePlayer({ name: 'player', id: n.Id });
   };
 
   const playNext = (n: Item) => {
@@ -443,7 +450,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     r.current.started = false; // already reported
     r.current.keepMode = true;
     send({ type: 'stop' });
-    replaceTop({ name: 'player', id: n.Id, fromStart: true });
+    replacePlayer({ name: 'player', id: n.Id, fromStart: true }); // PiP: the next episode stays in PiP
   };
 
   /** Credits shelf pick: the film is done, so report it at its end (counts as watched), then play the pick or open its page. */
@@ -459,7 +466,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     } else {
       r.current.keepMode = true; // film to film: keep the movie display mode
       send({ type: 'stop' });
-      replaceTop({ name: 'player', id: n.Id });
+      replacePlayer({ name: 'player', id: n.Id });
     }
   };
 
@@ -492,7 +499,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   });
   const autoSkip = useAutoSkip({ item: it, segments, pos, playing: state === 'Playing', seekTo });
   const countdown = useNextCountdown({
-    visible: showNext && !activeSeg, clean: nextT.clean, playing: state === 'Playing',
+    visible: showNext && !activeSeg && !inPip, clean: nextT.clean, playing: state === 'Playing',
     blocked: () => !!(dialog.value || finder.value || panelOpen.current || stillWatching.value),
     advance: () => next && !r.current.exiting && advance(next, true),
   });
@@ -501,7 +508,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   // Movies: "More Like This" shelf at the end credits (components/CreditsShelf.tsx, lib/upnext-movie.ts).
   const shelf = useCreditsShelf({
     item: it, segments, runtimeMs: (it?.RunTimeTicks ?? 0) / TICKS_PER_MS || dur, posMs: pos, root,
-    suppressed: !!activeSeg || (!ui && preview !== null),
+    suppressed: !!activeSeg || (!ui && preview !== null) || inPip,
     open: (n, details) => openFromShelf(n, details),
     openTmdb: (t) => openTmdbFromShelf(t),
   });
@@ -826,6 +833,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     });
     const seekFocused = () => current()?.classList.contains('seek') ?? false;
     const off = pushHandler((e) => {
+      if (pipRef.current) return false; // PiP: every key belongs to the app (Menu = full screen is lib/pip.ts's global intercept)
       if (dialog.value || finder.value || panelOpen.current || stillWatching.value) return false; // dialog / finder / episodes panel / still-watching handle themselves
       const c = r.current;
       c.lastInput = performance.now();
@@ -949,7 +957,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   useEffect(() => {
     if (isNative || isAndroidTV) return; // TV remote D-pad arrows must navigate the overlay, not seek
     const onKey = (e: KeyboardEvent) => {
-      if (dialog.value || finder.value || panelOpen.current || stillWatching.value || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (pipRef.current || dialog.value || finder.value || panelOpen.current || stillWatching.value || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === ' ') {
         e.preventDefault();
         e.stopPropagation();
@@ -989,6 +997,36 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     return () => cancelAnimationFrame(t);
   }, [ui, !!sess, state === 'Playing' || state === 'Paused']);
 
+  // ---------- picture-in-picture (lib/pip.ts) ----------
+  const goPip = () => {
+    if (!pipSupported() || err) return;
+    cancelPreview();
+    setShowInfo(false);
+    setShowEps(false);
+    log('pip: enter', { item: it?.Name, posS: Math.round(r.current.pos / 1000) });
+    enterPip(); // pops the player route: the app gets focus back where playback started
+  };
+  const wasPip = useRef(inPip);
+  useEffect(() => {
+    if (wasPip.current === inPip) return;
+    wasPip.current = inPip;
+    if (inPip) return;
+    // Back to full screen: overlay up, focus on Play (the overlay rAF in showUi also defers to dialogs / still-watching).
+    log('pip: leave', { posS: Math.round(r.current.pos / 1000) });
+    setUi(true);
+    showUi('.pp-play');
+  }, [inPip]);
+  // "Are you still watching?" fired while in PiP: bring the player back so the prompt is seen and answered.
+  useEffect(() => {
+    if (inPip && sw.open) pipFullScreen('still watching');
+  }, [inPip, sw.open]);
+  // A fatal error in PiP: toast and close (no error panel in a corner window).
+  useEffect(() => {
+    if (!inPip || !err) return;
+    showToast("Can't play this: " + err, 5000);
+    exit();
+  }, [inPip, err]);
+
   // ---------- render ----------
   const shown = preview ?? pos;
   const pct = dur > 0 ? Math.min(1, shown / dur) : 0;
@@ -1010,6 +1048,14 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   const aInfo = sess?.source.MediaStreams.find((m) => m.Index === sess.audioIndex && m.Type === 'Audio');
   const transcodeReasons = sess?.source.TranscodingUrl && sess.playMethod !== 'DirectPlay' ? decodeURIComponent(/TranscodeReasons=([^&]+)/.exec(sess.source.TranscodingUrl)?.[1] ?? '').replace(/,/g, ', ') : '';
   const currentChapter = chapters.length > 1 ? [...chapters].reverse().find((c) => c.StartPositionTicks / TICKS_PER_MS <= shown) : undefined;
+
+  if (inPip) {
+    return (
+      <div class="player-pip">
+        <PipWindow title={title || it?.Name || ''} subtitle={subtitle} pct={pct} loading={loading || starting} paused={state === 'Paused'} onFull={() => pipFullScreen('click')} onClose={exit} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1175,6 +1221,11 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
             <div class={'btn icon focusable info-btn' + (showInfo ? ' on' : '')} tabIndex={-1} title="Playback info" onClick={() => setShowInfo((v) => !v)}>
               <Icon name="info" />
             </div>
+            {pipSupported() && !err && (
+              <div class="btn icon focusable pip-btn" tabIndex={-1} data-fkey="p-pip" title="Picture in picture" onClick={goPip}>
+                <Icon name="pip" />
+              </div>
+            )}
             {!isNative && !isAndroidTV && (document.fullscreenEnabled || (document as any).webkitFullscreenEnabled) && (
               <div class="btn icon focusable fs-btn" tabIndex={-1} title="Fullscreen (F)" onClick={() => toggleFullscreen().then(() => setFsTick((n) => n + 1))}>
                 <Icon name={document.fullscreenElement ? 'fullscreenExit' : 'fullscreen'} />

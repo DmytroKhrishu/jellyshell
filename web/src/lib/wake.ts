@@ -5,7 +5,7 @@
 // Suspend detection doesn't rely on visibilitychange (UWP suspend doesn't always deliver it to the WebView): a 1 s ticker
 // that suddenly sees a big wall-clock gap means the process was frozen.
 import { isXbox } from './mode';
-import { playerActive } from './router';
+import { playbackActive } from './router'; // full screen OR picture-in-picture: never reload under a playing video
 import { log } from './log';
 
 const LONG_SLEEP_MS = 10 * 60_000;
@@ -16,7 +16,7 @@ let hiddenAt = 0;
 let pending = false;
 
 function reload(why: string, gapMs: number) {
-  if (playerActive.value) {
+  if (playbackActive.value) {
     // Never yank a running player; reload as soon as the user leaves it.
     if (!pending) log('wake: reload deferred (player)', why, Math.round(gapMs / 1000) + 's');
     pending = true;
@@ -40,7 +40,7 @@ if (isXbox) {
     else if (hiddenAt && Date.now() - hiddenAt > LONG_SLEEP_MS) reload('visible', Date.now() - hiddenAt);
   });
 
-  playerActive.subscribe((on) => {
+  playbackActive.subscribe((on) => {
     if (!on && pending) reload('after-player', 0);
   });
 }

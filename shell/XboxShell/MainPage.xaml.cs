@@ -308,6 +308,9 @@ namespace XboxShell
                     case "setAudioBoost":
                         await SetAudioBoostAsync(msg);
                         break;
+                    case "setVideoRect":
+                        SetVideoRect(msg);
+                        break;
                     case "exit":
                         await StopAsync("exit", false);
                         await RestoreDisplayModeAsync("exit");
@@ -610,6 +613,7 @@ namespace XboxShell
             };
             Root.Children.Insert(0, _player);
             _player.SetMediaPlayer(_mp);
+            ApplyVideoRect(); // a PiP rect sent before the first play
 
             _timeTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
             _timeTimer.Tick += (s, e) =>
@@ -1634,6 +1638,7 @@ namespace XboxShell
             }
 
             caps["hdrDisplay"] = JsonValue.CreateBooleanValue(hdrDisplay);
+            caps["pip"] = JsonValue.CreateBooleanValue(true); // setVideoRect (VideoRect.cs)
 
             var video = new SortedSet<string>();
             var audio = new SortedSet<string>();

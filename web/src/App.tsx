@@ -17,7 +17,8 @@ import { Login } from './pages/Login';
 import { MobileChrome } from './components/MobileChrome';
 import { Icon, IconName } from './components/icons';
 import { auth, logout, setAuth, DEFAULT_SERVER } from './lib/jellyfin';
-import { TABS, tab, stack, switchTab, tabStep, pop, push, takeRestore, visitedTabs, top, visibleTabs, playerActive } from './lib/router';
+import { tab, stack, switchTab, tabStep, pop, push, takeRestore, visitedTabs, top, visibleTabs, playback, playbackActive, closePlayback } from './lib/router';
+import './lib/pip'; // picture-in-picture: global Menu = full screen
 import './lib/caps'; // per-user capabilities (hides Downloads etc.)
 import './lib/remote'; // phone remote host (resumes polling when a phone is paired)
 import { dashAvailable, switchSide, viewCameFromTextInput } from './lib/sides';
@@ -199,7 +200,7 @@ export function App() {
         case 'view':
           if (e.repeat) return true;
           // Merged Store app: View = switch to the Dash side (the player and text fields keep View for themselves).
-          if (dashAvailable.value && !playerActive.value && !viewCameFromTextInput()) return switchSide('dash'), true;
+          if (dashAvailable.value && !playbackActive.value && !viewCameFromTextInput()) return switchSide('dash'), true; // also in PiP: a side switch reloads the WebView
           focusEl(document.querySelector<HTMLElement>(`[data-fkey="tab-${tab.value}"]`));
           return true;
       }
@@ -248,7 +249,7 @@ export function App() {
       if (c.open) push({ name: 'item', id: c.open });
       if (c.person) push({ name: 'person', jfId: c.person.jfId, tmdbId: c.person.tmdbId });
       if (c.playId) push({ name: 'player', id: c.playId, startMs: c.startMs });
-      if (c.stop && top.value.name === 'player') pop();
+      if (c.stop) closePlayback('remote stop');
       if (c.back) pop();
       if (c.logout) logout();
       if (c.state) log('STATE', { tab: tab.value, stack: stack.value.map((s) => s.route), focus: current()?.dataset.fkey ?? current()?.textContent?.slice(0, 40), w: innerWidth, h: innerHeight });
@@ -265,6 +266,7 @@ export function App() {
   }
 
   const onPlayer = routeTop.name === 'player';
+  const pb = playback.value;
   return (
     <>
       <Backdrop />
@@ -293,9 +295,8 @@ export function App() {
           ) : null,
         )}
       </div>
-      {onPlayer && routeTop.name === 'player' && (
-        <PlayerHost key={st[st.length - 1].key} id={routeTop.id} startMs={routeTop.startMs} fromStart={routeTop.fromStart} />
-      )}
+      {/* Keyed by the playback session, not the route: it stays mounted in picture-in-picture (lib/pip.ts). */}
+      {pb && <PlayerHost key={pb.key} id={pb.id} startMs={pb.startMs} fromStart={pb.fromStart} />}
       <SubtitleFinderHost />
       <MobileChrome />
       <Dialog />
