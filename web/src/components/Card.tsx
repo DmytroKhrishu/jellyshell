@@ -67,10 +67,12 @@ interface RowProps {
   id: string;
   children: ComponentChildren;
   kind?: CardKind;
+  /** Left/Right stop (bump) at the row's ends instead of jumping diagonally into a longer row above/below. */
+  lockEnds?: boolean;
 }
-export function Row({ title, id, children, kind = 'poster' }: RowProps) {
+export function Row({ title, id, children, kind = 'poster', lockEnds }: RowProps) {
   return (
-    <section class={`row row-${kind}`} data-group={id} data-scrollunit>
+    <section class={`row row-${kind}`} data-group={id} data-scrollunit data-block={lockEnds ? 'left right' : undefined}>
       <h2 class="row-title">{title}</h2>
       <div class="row-viewport" data-hscroll>
         <div class="row-track">{children}</div>
