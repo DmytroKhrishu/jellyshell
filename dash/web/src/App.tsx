@@ -2,7 +2,7 @@ import { signal, computed } from '@preact/signals';
 import { useEffect, useState } from 'preact/hooks';
 import { pushHandler, lastInputAt } from './lib/input';
 import { current, focusEl, focusFirst, move, page, restoreIn, resetScroll } from './lib/focus';
-import { calendar, backdrops, weather, settings, now, hm, longDate, until, photoUrl, type Photo } from './lib/data';
+import { calendar, backdrops, weather, settings, features, now, hm, longDate, until, photoUrl, type Photo, type Feature } from './lib/data';
 import { wmo } from './lib/wmo';
 import { QR } from './components/charts';
 import { Overview } from './pages/Overview';
@@ -17,20 +17,34 @@ import { Video, Film } from 'lucide-preact';
 import { mediaAvailable, switchSide, setMockNotice, viewCameFromTextInput } from './lib/sides';
 import './styles/sides.css';
 
-const TABS = [
+// `need`: the data source a tab shows. Tabs whose source has no provider (server features) are left out.
+const TABS: readonly { id: string; label: string; C: () => any; need?: Feature }[] = [
   { id: 'overview', label: 'Overview', C: Overview },
-  { id: 'calendar', label: 'Calendar', C: Calendar },
-  { id: 'weather', label: 'Weather', C: Weather },
-  { id: 'home', label: 'Home', C: Home },
-  { id: 'music', label: 'Music', C: Music },
-  { id: 'photos', label: 'Photos', C: Photos },
-  { id: 'server', label: 'Server', C: Server },
+  { id: 'calendar', label: 'Calendar', C: Calendar, need: 'calendar' },
+  { id: 'weather', label: 'Weather', C: Weather, need: 'weather' },
+  { id: 'home', label: 'Home', C: Home, need: 'home' },
+  { id: 'music', label: 'Music', C: Music, need: 'music' },
+  { id: 'photos', label: 'Photos', C: Photos, need: 'photos' },
+  { id: 'server', label: 'Server', C: Server, need: 'server' },
   { id: 'settings', label: 'Settings', C: Settings },
-] as const;
-type TabId = (typeof TABS)[number]['id'];
+];
+type TabId = 'overview' | 'calendar' | 'weather' | 'home' | 'music' | 'photos' | 'server' | 'settings';
+/** Tabs with a data source (only Overview + Settings until /api/config answers, so nothing flashes in and out). */
+const visibleTabs = computed(() => {
+  const f = features.value;
+  return TABS.filter((t) => !t.need || !!f?.[t.need]);
+});
 
 const initial = (location.hash.slice(1) as TabId) || 'overview';
 export const tab = signal<TabId>(TABS.some((t) => t.id === initial) ? initial : 'overview');
+// A remembered tab whose source went away (or isn't known yet) falls back to Overview once features are known.
+features.subscribe((f) => {
+  if (f && !visibleTabs.value.some((t) => t.id === tab.value)) {
+    const inBar = !!document.activeElement?.closest?.('.tabbar');
+    switchTab('overview');
+    requestAnimationFrame(() => (inBar ? focusEl(tabEl()) : focusFirst(activePageEl())));
+  }
+});
 const viewer = signal<{ items: Photo[]; i: number } | null>(null);
 const ambient = signal(new URLSearchParams(location.search).has('ambient'));
 const toastMsg = signal<string | null>(null);
@@ -56,9 +70,9 @@ function switchTab(id: TabId) {
   });
 }
 function tabStep(d: number) {
-  const i = TABS.findIndex((t) => t.id === tab.value);
-  const n = TABS[(i + d + TABS.length) % TABS.length];
-  switchTab(n.id);
+  const vt = visibleTabs.value;
+  const i = Math.max(0, vt.findIndex((t) => t.id === tab.value));
+  switchTab(vt[(i + d + vt.length) % vt.length].id as TabId);
 }
 export function openPhoto(items: Photo[], i: number) {
   viewer.value = { items, i };
@@ -118,15 +132,15 @@ function TabBar() {
   return (
     <nav class="tabbar" data-lastresort data-group="tabbar">
       <div class="tabbar-inner">
-        {TABS.map((t) => (
+        {visibleTabs.value.map((t) => (
           <div
             key={t.id}
             class={'tab focusable' + (t.id === tab.value ? ' selected' : '')}
             tabIndex={-1}
             data-fkey={'tab-' + t.id}
-            onFocus={() => switchTab(t.id)}
+            onFocus={() => switchTab(t.id as TabId)}
             onClick={() => {
-              switchTab(t.id);
+              switchTab(t.id as TabId);
               requestAnimationFrame(() => restoreIn(activePageEl()));
             }}
           >
@@ -332,7 +346,7 @@ export function App() {
         <TabBar />
         <TopClock />
         <div class="pages">
-          {TABS.map(({ id, C }) => (
+          {visibleTabs.value.map(({ id, C }) => (
             <div class={'page' + (id === t ? ' active' : '') + (id === 'home' ? '' : ' fit')} data-tab={id} key={id}>
               {/* Only Home is tall enough to scroll; every other page is laid out to fit one 1080p screen. */}
               {id === 'home' ? (

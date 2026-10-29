@@ -10,6 +10,8 @@ export interface CalEvent {
   url?: string | null;
   location?: string | null;
   allDay?: boolean;
+  /** 'push' (an agent, e.g. the Mac one) or 'ics' (CALENDAR_ICS_URLS) */
+  source?: string;
 }
 export interface Photo { id: string; taken?: string; place?: string }
 
@@ -18,6 +20,12 @@ export const calendar = signal<{ mock?: boolean; updatedAt: number; events: CalE
 export const home = signal<any>(null);
 export const server = signal<any>(null);
 export const photos = signal<{ memories: { title: string; assets: Photo[] }[]; favorites: Photo[]; random: Photo[] } | null>(null);
+/** Which optional sources have a provider (GET /api/config `features`, see server.py features()). Tabs and Overview tiles
+ * of the rest are hidden. null until the first answer; an older server without `features` means everything is on. */
+export type Feature = 'calendar' | 'home' | 'photos' | 'music' | 'weather' | 'server';
+export type Features = Record<Feature, boolean>;
+const ALL_ON: Features = { calendar: true, home: true, photos: true, music: true, weather: true, server: true };
+export const features = signal<Features | null>(null);
 /** Sources the server reports as not set up (503 {configured:false}): url -> reason. Pages show it instead of "Loading…". */
 export const unconfigured = signal<Record<string, string>>({});
 // The Xbox WebView reports the console's zone (often US Pacific), not the household's. Everything runs on "wall" Dates:
@@ -82,32 +90,53 @@ function poll(sig: { value: any }, url: string, ms: number, map: (v: any) => any
 }
 
 let zoneFromServer = false;
-export function startData() {
+/** Re-read every minute (cheap) so a tab appears by itself once an agent's first push arrives. */
+function loadConfig() {
   fetch('/api/config', { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null))
     .then((c) => {
-      if (c?.timeZone) {
+      if (!c) throw new Error('no config');
+      if (c.timeZone) {
         zoneFromServer = true;
         setZone(c.timeZone);
       }
+      const f: Features = { ...ALL_ON, ...(c.features ?? {}) };
+      const old = features.value;
+      if (!old || (Object.keys(f) as Feature[]).some((k) => f[k] !== old[k])) features.value = f;
+      setTimeout(loadConfig, 60_000);
     })
-    .catch(() => {});
-  poll(weather, '/api/weather', 10 * 60_000, (w) => {
+    .catch(() => setTimeout(loadConfig, features.value ? 60_000 : 3_000));
+}
+
+/** Starts a source's polling the first time its feature is on (never for sources nobody provides). */
+function when(f: Feature, start: () => void) {
+  let started = false;
+  const off = features.subscribe((v) => {
+    if (started || !v?.[f]) return;
+    started = true;
+    start();
+    queueMicrotask(() => off());
+  });
+}
+
+export function startData() {
+  loadConfig();
+  when('weather', () => poll(weather, '/api/weather', 10 * 60_000, (w) => {
     if (!zoneFromServer) setZone(w?.timezone);
     // Date-only strings ("2026-10-14") parse as UTC midnight, which is the previous day west of Greenwich: make them local.
     if (w?.daily?.time) w.daily.time = w.daily.time.map((t: string) => (t.length === 10 ? t + 'T00:00' : t));
     return w;
-  });
-  // All-day events too: EventKit sends them as local midnight with an offset, which the WebView would shift a day back.
-  poll(calendar, '/api/calendar', 60_000, (c) => ({
+  }));
+  // All-day events too: EventKit and ICS feeds send them as local midnight with an offset, which the WebView would shift a day back.
+  when('calendar', () => poll(calendar, '/api/calendar', 60_000, (c) => ({
     ...c,
     events: (c.events ?? []).map((e: CalEvent) => ({ ...e, start: wallIso(e.start), end: wallIso(e.end) })),
-  }));
-  poll(home, '/api/home', 30_000);
-  poll(server, '/api/server', 5_000);
-  poll(photos, '/api/photos', 15 * 60_000);
+  })));
+  when('home', () => poll(home, '/api/home', 30_000));
+  when('server', () => poll(server, '/api/server', 5_000));
+  when('photos', () => poll(photos, '/api/photos', 15 * 60_000));
   poll(backdrops, '/api/backdrops', 30 * 60_000);
-  refreshNowPlaying();
+  when('music', () => refreshNowPlaying());
   poll(settings, '/api/settings', 60_000);
   setInterval(() => (now.value = wall()), 5_000);
 }

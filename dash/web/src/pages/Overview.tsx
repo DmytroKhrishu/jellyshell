@@ -1,4 +1,4 @@
-import { calendar, weather, home, server, photos, now, hm, longDate, until, upcoming, relDay, ago, photoUrl, bytes } from '../lib/data';
+import { calendar, weather, home, server, photos, features, now, hm, longDate, until, upcoming, relDay, ago, photoUrl, bytes } from '../lib/data';
 import { wmo } from '../lib/wmo';
 import { Spark } from '../components/charts';
 import { go, openPhoto } from '../App';
@@ -15,9 +15,20 @@ export function Overview() {
   const mem = photos.value?.memories?.[0];
   const cur = w?.current;
   const c = cur ? wmo(cur.weather_code, !!cur.is_day) : null;
+  // Only tiles with a data source (server features). The grid layout follows what's left (styles: .ov-c* / .ov-s*):
+  // with the calendar it keeps the tall left column; without it few tiles sit in one row under a bigger clock.
+  const f = features.value;
+  const hasCal = !!f?.calendar;
+  const small = [f?.weather && 'weather', f?.home && 'home', f?.server && 'server', f?.photos && mem && 'photo'].filter(Boolean) as string[];
+  const k = small.length;
+  const lay = hasCal ? `ov-c${k}` : `ov-s${k}`;
+  const sparse = !hasCal && k < 4;
+  // Weather tile: more hours when it's wide, the next days when it's tall.
+  const wxHours = sparse ? [0, 12, 8, 6][k] : 6;
+  const wxTall = (hasCal && k === 1) || (!hasCal && k === 1);
 
   return (
-    <div class="page-pad">
+    <div class={'page-pad ov-page ' + lay + (sparse ? ' ov-sparse' : '')}>
       <div class="hero-row">
       <section class="hero">
         <div class="hero-time">{hm(d)}</div>
@@ -28,11 +39,11 @@ export function Overview() {
           </div>
         )}
       </section>
-      <NowPlayingTile />
+      {f?.music && <NowPlayingTile />}
       </div>
 
-      <div class="grid overview" data-group="ov">
-        <button class="tile focusable tile-cal" data-fkey="ov-cal" data-autofocus onClick={() => go('calendar')}>
+      {(hasCal || k > 0) && <div class={'grid overview ' + lay} data-group="ov">
+        {hasCal && <button class="tile focusable tile-cal" data-fkey="ov-cal" data-autofocus onClick={() => go('calendar')}>
           <div class="tile-h">Up next {cal?.mock && <span class="pill">sample data</span>}</div>
           {next.length === 0 && <div class="muted big-empty">Nothing else today</div>}
           {next.map((e, i) => {
@@ -52,14 +63,14 @@ export function Overview() {
               </div>
             );
           })}
-        </button>
+        </button>}
 
-        <button class="tile focusable tile-weather" data-fkey="ov-weather" onClick={() => go('weather')}>
-          <div class="tile-h">Weather</div>
+        {f?.weather && <button class={'tile focusable tile-weather' + (wxTall ? ' tall' : '')} data-fkey="ov-weather" onClick={() => go('weather')}>
+          <div class="tile-h">Weather {w?.mock && <span class="pill">sample data</span>}</div>
           {w && (
             <>
               <div class="wx-row">
-                {w.hourly.time.slice(nowHourIdx(w), nowHourIdx(w) + 6).map((t: string, i: number) => {
+                {w.hourly.time.slice(nowHourIdx(w), nowHourIdx(w) + wxHours).map((t: string, i: number) => {
                   const j = nowHourIdx(w) + i;
                   const x = wmo(w.hourly.weather_code[j], !!w.hourly.is_day[j]);
                   return (
@@ -75,16 +86,17 @@ export function Overview() {
                 <Sunrise size="1.1em" /> {w.daily.sunrise[0].slice(11)} <Sunset size="1.1em" /> {w.daily.sunset[0].slice(11)}
                 <span class="sep">·</span> H {Math.round(w.daily.temperature_2m_max[0])}° L {Math.round(w.daily.temperature_2m_min[0])}°
               </div>
+              {wxTall && <WxDays w={w} />}
             </>
           )}
-        </button>
+        </button>}
 
-        <button class="tile focusable tile-home" data-fkey="ov-home" onClick={() => go('home')}>
+        {f?.home && <button class="tile focusable tile-home" data-fkey="ov-home" onClick={() => go('home')}>
           <div class="tile-h">Home {h?.mock && <span class="pill">sample data</span>}{h && !h.mock && <span class="hs-upd">{ago(h.updatedAt)}</span>}</div>
           {h && <HomeLive h={h} />}
-        </button>
+        </button>}
 
-        <button class="tile focusable tile-server" data-fkey="ov-server" onClick={() => go('server')}>
+        {f?.server && <button class="tile focusable tile-server" data-fkey="ov-server" onClick={() => go('server')}>
           <div class="tile-h">Server · {s?.host}</div>
           {s && (
             <div class="srv-mini">
@@ -98,15 +110,34 @@ export function Overview() {
               </div>
             </div>
           )}
-        </button>
+        </button>}
 
-        {mem && (
+        {f?.photos && mem && (
           <button class="tile focusable tile-photo" data-fkey="ov-photo" onClick={() => openPhoto(mem.assets, 0)}>
             <img src={photoUrl(mem.assets[0].id)} loading="lazy" />
             <div class="photo-cap"><div class="tile-h">On this day</div><div>{mem.title}</div></div>
           </button>
         )}
-      </div>
+      </div>}
+    </div>
+  );
+}
+
+/** Next days for a tall weather tile (it has the height when it's the only small tile). */
+function WxDays({ w }: { w: any }) {
+  return (
+    <div class="wx-days">
+      {w.daily.time.slice(1, 6).map((t: string, i: number) => {
+        const x = wmo(w.daily.weather_code[i + 1], true);
+        return (
+          <div class="wx-day">
+            <span class="dim">{relDay(new Date(t))}</span>
+            <x.Icon size="1.5rem" />
+            <b>{Math.round(w.daily.temperature_2m_max[i + 1])}°</b>
+            <span class="dim">{Math.round(w.daily.temperature_2m_min[i + 1])}°</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
