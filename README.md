@@ -45,8 +45,9 @@ with HDMI mode and frame-rate switching.
   - **Seerr / Jellyseerr / Overseerr**: request movies and shows, "My Requests", TMDB pages for titles you don't have yet.
   - **Sonarr / Radarr / qBittorrent**: a read-only Downloads queue with live speed and ETA, plus a release calendar (admins).
   - **Bazarr**: find, download and re-sync subtitles right from the player (admins).
-- **Optional dashboard ("Dash")**: a second side of the Xbox app (View button) with a clock, weather, calendar, Apple Home
-  status, Immich photo memories, server stats and HomePod now-playing.
+- **Optional dashboard ("Dash")**: a second side of the Xbox app (View button): a clock plus whichever tiles you
+  configure. Weather (Open-Meteo), calendars (Google, iCloud, Outlook ICS links), Immich photo memories, server stats,
+  and, in the author's setup, Apple Home and HomePod now-playing. Tiles you don't configure don't appear.
 - **Sharing**: an optional hardened public listener for a reverse proxy, Tailscale Funnel or Cloudflare Tunnel, with
   per-user capabilities and rate limits.
 
@@ -72,7 +73,7 @@ with HDMI mode and frame-rate switching.
 | `web-poc/` | The page server (Python, stdlib only). Serves the UI and keeps integration API keys server-side |
 | `shell/XboxShell/` | The Xbox app (UWP, C#): a full-screen WebView2 over a native `MediaPlayerElement` |
 | `android/` | Android TV and phone app (a Kotlin WebView wrapper, two flavors) |
-| `dash/` | Optional dashboard: web UI, server, macOS agent for Calendar/Home, HomePod sidecar |
+| `dash/` | Optional dashboard: web UI, server, plus the author's example providers (macOS agent for Calendar/Home, HomePod sidecar) |
 | `docs/` | Bridge contract, controller UX spec, configuration and build docs |
 
 The page server is optional for the Xbox app: it also ships a bundled copy of the UI that talks to Jellyfin directly
@@ -108,7 +109,9 @@ JELLYFIN_API_KEY=...          # needed for the subtitle tools and the HDR pictur
 
 Alternatively, mount your *arr config folders read-only and set `ARR_CONFIG_DIR`; the keys are then read from there.
 
-- The dashboard is a separate compose profile: `docker compose --profile dash up -d --build`.
+- The dashboard is a separate compose profile: `docker compose --profile dash up -d --build`. With nothing else set it
+  is a clock and server stats; add `DASH_LAT`/`DASH_LON` for weather, `CALENDAR_ICS_URLS` for calendars, Immich for
+  photos ([configuration](docs/configuration.md#dashboard-dashserverserverpy)).
 - Without Docker: run `cd web && npm ci && npm run build`, then `python3 web-poc/server.py`. It reads the same `.env`.
 
 Full reference: [configuration](docs/configuration.md) · [Docker](docs/docker.md) · [public access](docs/public-access.md)
@@ -117,7 +120,7 @@ Full reference: [configuration](docs/configuration.md) · [Docker](docs/docker.m
 
 The integrations are the ones the author runs (Seerr, Sonarr/Radarr, qBittorrent, Bazarr, Immich, Apple Home via a Mac
 agent, a HomePod). Anything you don't use can stay unset and its feature hides itself. To plug in something else
-(Transmission, Home Assistant, Google Calendar, PhotoPrism, Sonos, ...), see
+(Transmission, Home Assistant, PhotoPrism, Sonos, ...), see
 **[docs/integrations.md](docs/integrations.md)**. It lists, per feature, the one server function to replace and the
 JSON shape the UI expects. Calendar and Home take plain JSON pushes, so any script can feed them. The page is written
 so you can also hand it to an AI coding agent: "make the Dash use Home Assistant, following docs/integrations.md".
