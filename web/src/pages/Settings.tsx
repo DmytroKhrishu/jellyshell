@@ -127,6 +127,13 @@ export function Settings({ active }: { active: boolean }) {
               }
             />
             <SetRow
+              label="More Like This at credits"
+              hint="Movies: when the end credits start, a row of related titles slides up. Down to browse, B to hide."
+              value={s.creditsShelf ? 'On' : 'Off'}
+              fkey="set-creditsshelf"
+              onClick={() => updateSettings({ creditsShelf: !s.creditsShelf })}
+            />
+            <SetRow
               label="Still watching check"
               hint="Episodes only: after this long with no button presses, playback stops and asks if you're still there."
               value={STILL_WATCHING.find(([m]) => m === s.stillWatchingMin)?.[1] ?? `${s.stillWatchingMin} min`}

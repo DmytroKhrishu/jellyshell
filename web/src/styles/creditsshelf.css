@@ -1,0 +1,50 @@
+/* Movies: "More Like This" shelf at the end credits (components/CreditsShelf.tsx). Calm slide-up from the bottom, TV-safe. */
+.cshelf { --cs-w: 17.5rem; position: absolute; left: 0; right: 0; bottom: 0; z-index: 3; padding: 0 var(--safe-x) calc(var(--safe-y) + 0.6rem);
+  opacity: 0; visibility: hidden; transform: translate3d(0, 2.4rem, 0); pointer-events: none;
+  transition: opacity 450ms var(--ease), transform 450ms var(--ease), bottom var(--t-overlay) var(--ease), visibility 0s linear 450ms; }
+.cshelf.on { opacity: 1; visibility: visible; transform: none; pointer-events: auto; transition: opacity 450ms var(--ease), transform 450ms var(--ease), bottom var(--t-overlay) var(--ease), visibility 0s; }
+/* Overlay up: sit above the timeline + controls; spatial D-pad goes seek bar <-> shelf. */
+.player.ui .cshelf { bottom: 13.4rem; }
+/* Soft dark floor under the shelf so cards read over bright credits; the video itself keeps playing untouched. */
+.cshelf-shade { position: absolute; left: 0; right: 0; bottom: 0; height: calc(100% + 8rem); z-index: -1; pointer-events: none;
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0) 100%); }
+
+.cshelf-head { display: flex; align-items: baseline; gap: 1.6rem; margin-bottom: 1.5rem; }
+.cshelf-title { font-size: 1.5rem; font-weight: 700; margin: 0; text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6); }
+.cshelf-hint { display: flex; align-items: center; gap: 0.5rem; font-size: 1.05rem; color: var(--fg-dim); transition: opacity 250ms var(--ease); }
+.cshelf-hint .ico { font-size: 1rem; }
+.cshelf .cs-hint-in { opacity: 0; position: absolute; }
+.cshelf:focus-within .cs-hint-enter { opacity: 0; }
+.cshelf:focus-within .cs-hint-in { opacity: 1; position: static; }
+.player.ui .cs-hint-enter { opacity: 0; } /* Down belongs to the controls while they're up */
+.cshelf-key { display: inline-flex; align-items: center; justify-content: center; width: 1.4rem; height: 1.4rem; border-radius: 50%; background: rgba(255, 255, 255, 0.85);
+  color: #0b0b10; font-size: 0.8rem; font-weight: 800; }
+.cshelf-key-b { margin-left: 0.9rem; }
+html.mouse .cshelf-hint, html.mode-mobile .cshelf-hint { display: none; }
+
+.cshelf .row-track { padding-top: 0.6rem; padding-bottom: 0.4rem; margin-top: -0.6rem; margin-bottom: -0.4rem; }
+.cshelf .cs-card { width: var(--cs-w); }
+.cshelf .card-text { opacity: 0.8; }
+.cshelf .card-title { font-size: 1.05rem; }
+.cshelf .card-sub { font-size: 0.92rem; }
+.cshelf .cs-next .card-sub { color: var(--accent, #a78bfa); }
+/* Focused card: a small play / info glyph in the corner says what A does. */
+.cs-play { position: absolute; left: 0.7rem; bottom: 0.7rem; width: 2.3rem; height: 2.3rem; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.92); color: #0b0b10; font-size: 0.95rem; opacity: 0; transform: scale(0.85); transition: opacity 200ms var(--ease), transform 200ms var(--ease); }
+.cs-card:focus .cs-play, html.mouse .cs-card:hover .cs-play { opacity: 1; transform: none; }
+
+/* Subtitles (credit songs) lift above the shelf instead of hiding behind it. */
+.player.cs-on .subs { transform: translate3d(0, -17rem, 0); }
+.player.cs-on.ui .subs { transform: translate3d(0, -26rem, 0); }
+
+.reduce-motion .cshelf { transition-duration: 1ms; transform: none; }
+
+/* Phone: native horizontal scroll (responsive.css row-viewport), tap = open. */
+html.mode-mobile .cshelf { --cs-w: min(15rem, 42vw); padding: 0 var(--safe-x) calc(var(--sb) + 14px); }
+html.mode-mobile .player.ui .cshelf { bottom: calc(var(--sb) + 104px); }
+html.mode-mobile .cshelf-head { margin-bottom: 8px; }
+html.mode-mobile .cshelf-title { font-size: 16px; }
+html.mode-mobile .cshelf .card-title { font-size: 13px; }
+html.mode-mobile .cshelf .card-sub { font-size: 12px; }
+html.mode-mobile .cs-play { display: none; }
+html.mode-mobile .player.cs-on .subs { transform: translate3d(0, -150px, 0); }

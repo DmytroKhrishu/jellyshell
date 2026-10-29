@@ -12,6 +12,7 @@ export interface Settings {
   stillWatchingMin: number; // "Are you still watching?" idle limit for short items, 0 = off
   skipIntros: 'ask' | 'seen' | 'always'; // auto-skip intros: never / once the show's intro was watched once / always
   nextAutoplay: number; // Next Episode countdown in s once the credits start; 0 = off, -1 = wait for the end of the file
+  creditsShelf: boolean; // movies: "More Like This" shelf while the end credits roll
 }
 
 const KEY = 'jellyshell.settings.v1';
@@ -26,6 +27,7 @@ const DEFAULTS: Settings = {
   stillWatchingMin: 60,
   skipIntros: 'seen',
   nextAutoplay: 5,
+  creditsShelf: true,
 };
 
 function load(): Settings {
