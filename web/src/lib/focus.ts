@@ -91,7 +91,8 @@ function blocked(el: HTMLElement, dir: Dir) {
   return null;
 }
 
-export function move(dir: Dir): boolean {
+/** `quiet`: no edge bump when nothing is there (the caller does something else instead). */
+export function move(dir: Dir, quiet = false): boolean {
   const root = scopeRoot();
   const cur = current();
   if (!cur) return focusFirst(root);
@@ -149,7 +150,7 @@ export function move(dir: Dir): boolean {
   }
   if (!best) best = fallback;
   if (!best) {
-    bump(cur, dir);
+    if (!quiet) bump(cur, dir);
     return false;
   }
   // Entering another group: prefer its remembered child (rows keep their position).

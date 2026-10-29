@@ -931,17 +931,24 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
         }
         if ((a === 'up' || a === 'down') && c.preview !== null) commitPreview();
       }
+      const hideUi = () => {
+        setUi(false);
+        setShowInfo(false);
+        (document.activeElement as HTMLElement)?.blur?.();
+      };
       if (a === 'back') {
         if (showInfo) {
           setShowInfo(false);
           return true;
         }
-        setUi(false);
-        setShowInfo(false);
-        (document.activeElement as HTMLElement)?.blur?.();
+        hideUi();
         return true;
       }
-      if (a === 'up' || a === 'down' || a === 'left' || a === 'right') {
+      if (a === 'up') {
+        if (!move('up', true)) hideUi(); // Up past the top of the controls hides them (YouTube TV style) instead of bumping
+        return true;
+      }
+      if (a === 'down' || a === 'left' || a === 'right') {
         move(a);
         return true;
       }
