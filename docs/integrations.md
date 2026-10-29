@@ -32,7 +32,7 @@ browser UI, with the provider both configured and unset.
 
 | Feature | Provider today | Server code | Routes the UI uses |
 |---|---|---|---|
-| Requests | Seerr / Jellyseerr / Overseerr | `arr_proxy.py` (`seerr`, `seerr_get`, `create_request`, `my_requests`, `release_dates`, `request_options`) | `GET /api/seerr/*` (allow-listed pass-through), `POST /api/seerr/request`, `GET /api/seerr/dates`, `GET /api/seerr/reqoptions` |
+| Requests | Seerr / Jellyseerr / Overseerr | `arr_proxy.py` (`seerr`, `seerr_get`, `create_request`, `my_requests`, `release_dates`, `request_options`), `franchise.py` (`related`) | `GET /api/seerr/*` (allow-listed pass-through), `POST /api/seerr/request`, `GET /api/seerr/dates`, `GET /api/seerr/reqoptions`, `GET /api/seerr/franchise?type=&id=` |
 | Downloads queue | Sonarr + Radarr, speeds from qBittorrent | `arr_proxy.py` `downloads`, `_qb_get`, `recent_imports` | `GET /api/downloads` |
 | Release calendar | Sonarr + Radarr | `arr_proxy.py` `calendar` | `GET /api/calendar?start=&end=` |
 | Subtitle tools | Bazarr (+ Jellyfin admin key) | `subs_proxy.py` | `/api/subs/*` |

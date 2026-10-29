@@ -17,6 +17,8 @@ import { isAndroidTV } from '../lib/mode';
 import { AVAIL_LABEL, SItem, availability, getDetail, me as getMe, ratings, related, titleOf, tmdbImg, yearOf, Me } from '../lib/seerr';
 import { DatesList, RequestSheet, SCard, StatusChip, certOf, findInLibrary, seasonState, CHIP_ICON } from './Requests';
 import { fmtDate } from '../lib/clock';
+import { SameWorldRow, useTmdbExtras } from '../components/FranchiseRows';
+import { tmdbKey } from '../lib/franchise';
 
 let meCache: Promise<Me> | null = null;
 
@@ -40,6 +42,7 @@ export function TmdbPage({ type, id, active }: { type: 'movie' | 'tv'; id: numbe
   const { data: rt } = useAsync(() => ratings(type, id).catch(() => null), [type, id]);
   const { data: recs } = useAsync(() => related(type, id, 'recommendations').catch(() => null), [type, id]);
   const { data: sim } = useAsync(() => related(type, id, 'similar').catch(() => null), [type, id]);
+  const { x: world } = useTmdbExtras(type, id);
   const [user, setUser] = useState<Me | null>(null);
   const [jfId, setJfId] = useState<string | null>(null);
   const [sheet, setSheet] = useState<{ season?: number } | null>(null);
@@ -99,7 +102,11 @@ export function TmdbPage({ type, id, active }: { type: 'movie' | 'tv'; id: numbe
     });
   };
   const relRow = (label: string, key: string, items?: SItem[] | null) => {
-    const xs = (items ?? []).filter((x) => x.mediaType === 'movie' || x.mediaType === 'tv' || !x.mediaType).map((x) => ({ ...x, mediaType: x.mediaType || type }));
+    const inWorld = new Set((world?.world ?? []).map(tmdbKey));
+    const xs = (items ?? [])
+      .filter((x) => x.mediaType === 'movie' || x.mediaType === 'tv' || !x.mediaType)
+      .map((x) => ({ ...x, mediaType: x.mediaType || type }))
+      .filter((x) => !inWorld.has(tmdbKey(x)));
     return xs.length ? (
       <section class="row row-poster rq-row" data-group={`tm-${key}-${id}`} data-scrollunit>
         <h2 class="row-title">{label}</h2>
@@ -225,6 +232,7 @@ export function TmdbPage({ type, id, active }: { type: 'movie' | 'tv'; id: numbe
               </div>
             </section>
           )}
+          <SameWorldRow x={world} gid={`tm-${type}-${id}`} />
           {relRow('Recommended', 'recs', recs?.results)}
           {relRow('Similar', 'sim', sim?.results)}
         </div>

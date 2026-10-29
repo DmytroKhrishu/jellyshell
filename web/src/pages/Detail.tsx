@@ -12,7 +12,7 @@ import {
 import { useAsync } from '../lib/useAsync';
 import { focusEl, focusFirst, current, remember, focusedKey } from '../lib/focus';
 import { pushHandler } from '../lib/input';
-import { openItem, playItem, contextMenu } from '../lib/actions';
+import { playItem, contextMenu } from '../lib/actions';
 import { mediaBadges, streams, audioLabel, subLabel, pickTracks } from '../lib/media';
 import { rememberAudio, rememberSub } from '../lib/trackmem';
 import { push } from '../lib/router';
@@ -21,6 +21,7 @@ import { endsAt } from '../lib/clock';
 import { dataRev } from '../lib/datasync';
 import { Icon } from '../components/icons';
 import { PersonCard } from '../components/PersonCard';
+import { MoreLikeThis, SameWorldRow, useTmdbExtras } from '../components/FranchiseRows';
 import '../styles/seasons.css';
 
 export function Detail({ id, seasonId, active }: { id: string; seasonId?: string; active: boolean }) {
@@ -251,6 +252,8 @@ function Head({ it, active, onChanged, playTarget, seasonId }: { it: Item; activ
 
 function Extras({ it }: { it: Item }) {
   const { data: sim } = useAsync(() => similar(it.Id), [it.Id]);
+  const tmdb = Number((it as Item & { ProviderIds?: Record<string, string> }).ProviderIds?.Tmdb) || null;
+  const { x, ready } = useTmdbExtras(it.Type === 'Series' ? 'tv' : 'movie', tmdb);
   const cast = (it.People ?? []).filter((p) => p.Type === 'Actor').slice(0, 14);
   return (
     <>
@@ -266,13 +269,8 @@ function Extras({ it }: { it: Item }) {
           </div>
         </section>
       )}
-      {sim && sim.Items.length > 0 && (
-        <Row title="More Like This" id={'sim-' + it.Id}>
-          {sim.Items.map((s) => (
-            <Card key={s.Id} item={s} kind="poster" fkey={'sim-' + s.Id} onSelect={(x) => openItem(x)} />
-          ))}
-        </Row>
-      )}
+      <SameWorldRow x={x} gid={it.Id} />
+      <MoreLikeThis it={it} sim={sim} x={x} ready={ready} />
     </>
   );
 }

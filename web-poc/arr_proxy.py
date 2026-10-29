@@ -942,6 +942,10 @@ def handle(handler, method):
             elif method == 'GET' and sub == '/dates':
                 whoami(*token)
                 res = release_dates(query)
+            elif method == 'GET' and sub == '/franchise':
+                import franchise  # imports this module: keep it lazy
+                whoami(*token)
+                res = franchise.related(query)
             elif method == 'GET' and sub == '/reqoptions':
                 res = request_options(token, query)
             elif method == 'POST' and sub == '/request':
