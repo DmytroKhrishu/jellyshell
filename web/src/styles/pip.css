@@ -1,0 +1,53 @@
+/* Picture-in-picture window (components/PipWindow.tsx, lib/pip.ts).
+   The video itself is NOT in this DOM: on Xbox the native MediaPlayerElement is raised above the WebView onto .pip-box,
+   in browsers #mock-video is moved onto it (lib/bridge.ts mock, inline styles). .pip-box is just the black frame under it. */
+.pip-win {
+  --pip-w: 28vw;
+  position: fixed; right: var(--safe-x); bottom: var(--safe-y); z-index: 40; width: var(--pip-w);
+  border-radius: var(--radius-m); background: rgb(14, 14, 20); border: 1px solid var(--glass-border);
+  box-shadow: 0 1.2rem 3.6rem rgba(0, 0, 0, 0.6); cursor: pointer; overflow: hidden;
+  transform-origin: 100% 100%; animation: pipIn 320ms var(--ease) both;
+}
+@keyframes pipIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+html.reduce-motion .pip-win { animation: none; }
+
+.pip-box { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius-m) var(--radius-m) 0 0; display: flex; align-items: center; justify-content: center; }
+.pip-box.covered::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)); }
+.pip-box .spinner { width: 2.4rem; height: 2.4rem; border-width: 0.22rem; }
+
+.pip-cap { position: relative; display: flex; align-items: center; gap: 1rem; padding: 0.75rem 1rem 0.95rem 1.1rem; min-height: 3.4rem; }
+.pip-text { flex: 1; min-width: 0; }
+.pip-title, .pip-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pip-title { font-size: 1.1rem; font-weight: 650; }
+.pip-sub { font-size: 0.95rem; color: var(--fg-dim); margin-top: 0.1rem; }
+.pip-hint { display: flex; align-items: center; gap: 0.4rem; flex: none; font-size: 0.95rem; color: var(--fg-muted); }
+.pip-hint .ico { font-size: 1rem; }
+.pip-prog { position: absolute; left: 0; right: 0; bottom: 0; height: 0.22rem; background: var(--progress-track); }
+.pip-prog i { position: absolute; inset: 0; background: var(--progress); transform-origin: 0 50%; transition: transform 250ms linear; }
+
+/* Close: mouse / touch only (controller: B never closes it; full screen with Menu, then B). */
+.pip-close {
+  all: unset; display: none; flex: none; width: 2.2rem; height: 2.2rem; border-radius: 50%; align-items: center; justify-content: center;
+  background: rgba(255, 255, 255, 0.1); color: var(--fg); cursor: pointer; transition: background var(--t-fast) ease;
+}
+.pip-close:hover { background: rgba(255, 255, 255, 0.22); }
+html.mouse .pip-close, html.touch .pip-close, html.mode-mobile .pip-close { display: flex; }
+html.mouse .pip-hint, html.touch .pip-hint, html.mode-mobile .pip-hint { display: none; }
+html.mouse .pip-win:not(:hover) .pip-close { opacity: 0.55; }
+
+/* Phones: above the bottom tab bar, a bit larger than 28% so it stays readable. */
+html.mode-mobile .pip-win {
+  --pip-w: min(56vw, 300px);
+  right: max(10px, env(safe-area-inset-right)); bottom: calc(var(--tabbar-h) + var(--sb) + 10px); border-radius: 12px;
+}
+html.mode-mobile .pip-box { border-radius: 12px 12px 0 0; }
+html.mode-mobile .pip-cap { padding: 6px 6px 8px 10px; min-height: 0; gap: 6px; }
+html.mode-mobile .pip-title { font-size: 13px; }
+html.mode-mobile .pip-sub { font-size: 12px; }
+html.mode-mobile .pip-close { width: 30px; height: 30px; }
+
+/* Player's PiP-mode root: takes no space and no input itself (unlike .player, which covers the screen). */
+.player-pip { position: static; }
+
+/* Player bottom bar: PiP button next to the info (i) button. */
+.pip-btn { width: 2.8rem !important; height: 2.8rem; border-radius: 50%; }

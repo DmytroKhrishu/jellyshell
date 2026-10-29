@@ -11,6 +11,8 @@ export interface Capabilities {
   audioFfmpeg: string[];
   containers: string[];
   maxAudioChannels: number;
+  /** Shell understands `setVideoRect` (picture-in-picture). Shells before it omit the flag: no PiP button. */
+  pip?: boolean;
 }
 
 export const DEFAULT_CAPS: Capabilities = {
@@ -168,7 +170,7 @@ const mock = (() => {
     handle(msg: any) {
       switch (msg.type) {
         case 'hello':
-          setTimeout(() => emit({ type: 'capabilities', ...DEFAULT_CAPS, deviceForm: 'Desktop (mock)', hdrDisplay: false }), 50);
+          setTimeout(() => emit({ type: 'capabilities', ...DEFAULT_CAPS, deviceForm: 'Desktop (mock)', hdrDisplay: false, pip: true }), 50);
           break;
         case 'play': {
           stop();
@@ -212,6 +214,22 @@ const mock = (() => {
         case 'setVolume':
           if (video) video.volume = msg.value;
           break;
+        case 'setVideoRect': {
+          // Same contract as native (docs/bridge.md "Picture in picture"): rect in page CSS px, raised above the UI,
+          // never hit-testable (clicks fall through to the PiP window under it); null = full screen behind the UI.
+          const v = (video ?? document.getElementById('mock-video')) as HTMLVideoElement | null;
+          const r = msg.rect as { x: number; y: number; w: number; h: number } | null;
+          if (v) {
+            const st = v.style;
+            if (r) {
+              Object.assign(st, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', right: 'auto', bottom: 'auto', zIndex: '2', pointerEvents: 'none', borderRadius: (msg.radius || 0) + 'px' });
+            } else {
+              for (const k of ['left', 'top', 'width', 'height', 'right', 'bottom', 'zIndex', 'pointerEvents', 'borderRadius'] as const) st[k] = '';
+            }
+          }
+          setTimeout(() => emit({ type: 'videoRect', rect: r ?? null }), 0);
+          break;
+        }
         case 'setAudioBoost':
           boost(video ?? (document.getElementById('mock-video') as HTMLVideoElement), msg);
           break;

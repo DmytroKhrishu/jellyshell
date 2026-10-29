@@ -26,6 +26,7 @@ When `window.chrome?.webview` is absent (a desktop browser during development), 
 | `exit` | — | close the app |
 | `switchSide` | `side` (`media`/`dash`) | native navigates the single WebView2 to that side's resolved URL (stops playback first). Dash unreachable → `sideUnavailable`, stays put |
 | `setStartSide` | `side` (`media`/`dash`) | persisted in LocalSettings `startSide`, used at the next launch |
+| `setVideoRect` | `rect: {x, y, w, h} \| null`, `vw`, `vh`, `radius?` | picture-in-picture: put the video in that box (page CSS px; `vw`/`vh` = the page viewport) **above** the WebView; `null` = full window behind it. Native replies `videoRect`. Only when capabilities has `pip: true`. See "Picture in picture" below. |
 
 ## native → web
 
@@ -39,6 +40,7 @@ When `window.chrome?.webview` is absent (a desktop browser during development), 
 | `error` | `code`, `message`, `fatal` (bool) | |
 | `playbackEnded` | — | |
 | `audioBoost` | `db`, `night`, `applied` (bool), `path` (`ffmpeg`/`mf`/`webaudio`), `filter?`, `reason?` | ack for `setAudioBoost` / a boosted `play` |
+| `videoRect` | `rect` (as sent, or `null`) | ack for `setVideoRect` |
 | `sideUnavailable` | `side` (`dash`) | the requested side's page server is unreachable (switch, or start side = dash at launch: sent right after `capabilities`) |
 
 Subtitles are rendered by the **web** layer (Jellyfin WebVTT delivery, synced to `time` events). Native does not render subtitles.
@@ -112,6 +114,24 @@ reads the stored `uiMode` at startup.
   built lazily on the first non-neutral boost (`web/src/lib/webaudio.ts`). Not offered on iOS/Safari (native HLS:
   WebKit's MediaElementSource yields silence for HLS).
 - The preference is per Jellyfin user in localStorage (`jellyshell.audioBoost.<userId>`), sent with every `play`.
+
+## Picture in picture (`setVideoRect`, capability `pip`)
+
+The web app can shrink the playing video into a floating window while the rest of the UI stays usable
+(web/src/lib/pip.ts, components/PipWindow.tsx). In PiP the pages are opaque again (no `html.playing`), so the
+video can't show through a transparent hole; instead the shell moves the video **on top**:
+
+- `setVideoRect {rect:{x,y,w,h}, vw, vh, radius}`: native sizes/positions the `MediaPlayerElement` to the rect
+  (scaled from the page's `vw`×`vh` CSS px to the XAML root), raises it above the WebView (`Canvas.ZIndex`),
+  keeps it out of input (`IsHitTestVisible=false`, `IsTabStop=false`: controller focus and keys stay in the WebView)
+  and clips its corners to `radius` (composition rounded-rectangle clip). Sent again on page resize.
+- `setVideoRect {rect:null}`: back to full window, behind the WebView (the normal player).
+- The rect persists across `play`/`stop` (next episode while in PiP keeps the window) until changed.
+- Ack: `videoRect {rect}`. Capability flag `pip: true` in `capabilities`; shells without it get no PiP button.
+- Display mode: entering PiP does **not** restore the TV's default refresh rate (an HDMI mode switch blanks the
+  screen for seconds and would interrupt the video). With Match frame rate the browsing UI can run at the film's
+  23.976 Hz while PiP is up (menus feel less smooth); leaving the player restores it as usual (`stop {restore:'now'}`).
+- Browser mock: the same message positions `#mock-video` (inline styles, `pointer-events:none`) and emits `videoRect`.
 
 ## Sides: media + dash in one app (shell 0.1.5x+ / store 1.0.x, docs/store-release.md)
 

@@ -11,7 +11,7 @@ import {
   Volume2, Moon, CircleAlert, CircleDashed, LoaderCircle, Clock, ChartPie, Trash, Eye, Clapperboard, ArrowDownToLine, Hourglass,
   Undo2, Sparkles, X, Sun, Contrast, LayoutDashboard, Server, Maximize, Minimize, CalendarDays, Ticket, MonitorPlay, Disc3,
   User, MapPin, Cake, ChevronUp, Library, SlidersHorizontal, Smartphone, Keyboard, Menu, Copy, ArrowLeft, Gamepad2, Hand, WifiOff,
-  CornerDownLeft, RotateCw, Lock, Minus, Plus, Circle,
+  CornerDownLeft, RotateCw, Lock, Minus, Plus, Circle, PictureInPicture2,
 } from 'lucide-preact';
 
 export type IconComp = ComponentType<any>;
@@ -30,6 +30,7 @@ export const I = {
   info: Info,
   fullscreen: Maximize,
   fullscreenExit: Minimize,
+  pip: PictureInPicture2,
   audio: AudioLines,
   subtitles: Captions,
   episodes: ListVideo,

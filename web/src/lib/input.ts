@@ -31,6 +31,11 @@ export function pushHandler(h: Handler) {
     if (i >= 0) handlers.splice(i, 1);
   };
 }
+/** Runs before every pushed handler (lib/pip.ts: Menu = full screen while picture-in-picture is up, whatever page is focused). */
+let interceptor: Handler | null = null;
+export function setInterceptor(h: Handler | null) {
+  interceptor = h;
+}
 export function onRelease(h: ReleaseHandler) {
   releaseHandlers.add(h);
   return () => releaseHandlers.delete(h);
@@ -61,6 +66,11 @@ export function dispatch(action: Action, source: ActionEvent['source'], repeat =
   if (!repeat) downAt.set(action, now);
   const ev: ActionEvent = { action, repeat, source, heldMs: repeat ? now - (downAt.get(action) ?? now) : 0 };
   lastAt = now;
+  try {
+    if (interceptor?.(ev)) return true;
+  } catch (e) {
+    log('interceptor error', action, e as Error);
+  }
   for (let i = handlers.length - 1; i >= 0; i--) {
     try {
       if (handlers[i](ev)) return true;
