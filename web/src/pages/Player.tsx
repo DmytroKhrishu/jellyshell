@@ -35,6 +35,7 @@ import { useAutoSkip } from '../components/AutoSkip';
 import { NextCard, nextAutoplayMode, nextLabel, useNextCountdown } from '../components/NextCountdown';
 import { nextTiming, noteFinished, segEnd } from '../lib/introskip';
 import { useRemotePlayer } from '../components/RemotePlayer';
+import { useCreditsShelf } from '../components/CreditsShelf';
 
 const HIDE_MS = 8000;
 const WAKE_HINT_MS = 4000;
@@ -444,6 +445,23 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
     replaceTop({ name: 'player', id: n.Id, fromStart: true });
   };
 
+  /** Credits shelf pick: the film is done, so report it at its end (counts as watched), then play the pick or open its page. */
+  const openFromShelf = (n: Item, details: boolean) => {
+    if (r.current.exiting) return;
+    r.current.exiting = true;
+    const s = r.current.sess;
+    if (s && r.current.started) reportStopped(s, r.current.dur || r.current.pos);
+    r.current.started = false; // already reported
+    if (details || n.Type !== 'Movie') {
+      send({ type: 'stop', restore: 'now' }); // back to the UI: default refresh rate at once
+      replaceTop({ name: 'item', id: n.Id });
+    } else {
+      r.current.keepMode = true; // film to film: keep the movie display mode
+      send({ type: 'stop' });
+      replaceTop({ name: 'player', id: n.Id });
+    }
+  };
+
   // ---------- segments / next ----------
   const activeSeg = segments.find((s) => ['Intro', 'Recap', 'Preview'].includes(s.Type) && pos >= s.StartTicks / TICKS_PER_MS && pos < s.EndTicks / TICKS_PER_MS - 1500);
   // Card at a plausible Outro start, else 40 s before the end (lib/introskip.ts). Segments are file times: measure against the item's
@@ -468,6 +486,14 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   });
   const cdRef = useRef(countdown);
   cdRef.current = countdown;
+  // Movies: "More Like This" shelf at the end credits (components/CreditsShelf.tsx, lib/upnext-movie.ts).
+  const shelf = useCreditsShelf({
+    item: it, segments, runtimeMs: (it?.RunTimeTicks ?? 0) / TICKS_PER_MS || dur, posMs: pos, root,
+    suppressed: !!activeSeg || (!ui && preview !== null),
+    open: (n, details) => openFromShelf(n, details),
+  });
+  const shelfRef = useRef(shelf);
+  shelfRef.current = shelf;
   useEffect(() => {
     if (showNext) noteFinished(it); // credits reached: the next episode of this series counts as bingeing (recap auto-skip)
   }, [showNext]);
@@ -806,6 +832,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
         return true;
       }
       if (a === 'back' && e.repeat) return true;
+      if (shelfRef.current.handle(e, c.ui)) return true; // credits shelf: Down/Up in and out, A/X/B on its cards
 
       // Shortcuts live in every state.
       switch (a) {
@@ -917,7 +944,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
           r.current.lastInput = performance.now();
           togglePause();
         }
-      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !current()?.closest('.seek')) {
+      } else if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !current()?.closest('.seek, .cshelf')) {
         e.preventDefault();
         e.stopPropagation();
         r.current.lastInput = performance.now();
@@ -973,7 +1000,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
 
   return (
     <div
-      class={'player' + (ui ? ' ui' : '') + (starting ? ' starting' : '')}
+      class={'player' + (ui ? ' ui' : '') + (starting ? ' starting' : '') + (shelf.visible ? ' cs-on' : '')}
       ref={root}
       data-scope
       onMouseMove={() => {
@@ -1056,6 +1083,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
         </div>
       )}
       {!activeSeg && !showNext && autoSkip.undo}
+      {shelf.node}
       {showNext && next && !activeSeg && <NextCard next={next} label={nextLabel(countdown, Math.max(0, dur - pos))} progress={countdown.progress} onPlay={() => playNext(next)} />}
 
       {!ui && preview !== null && (
