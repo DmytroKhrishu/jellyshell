@@ -103,6 +103,9 @@ namespace XboxShell
             _web = new WebView2();
             _web.CoreWebView2Initialized += OnCoreInitialized;
             _web.WebMessageReceived += OnWebMessage;
+            // The PiP rect + subtitle line belong to the page: a navigation (side switch, reload) starts a page that never
+            // sent one, so the next playback must not open in the old window.
+            _web.NavigationStarting += (s, a) => ResetVideoRect();
             _web.NavigationCompleted += (s, a) => Send("navigation", new JsonObject { ["ok"] = JsonValue.CreateBooleanValue(a.IsSuccess), ["status"] = JsonValue.CreateStringValue(a.WebErrorStatus.ToString()) });
             Root.Children.Add(_web);
 

@@ -89,6 +89,21 @@ namespace XboxShell
             Send("videoRect", ack);
         }
 
+        /// <summary>Back to full screen behind the WebView with no subtitle line (new page = no PiP state).</summary>
+        private void ResetVideoRect()
+        {
+            if (_videoRect == null && _pipSubsText.Length == 0)
+            {
+                return;
+            }
+
+            _videoRect = null;
+            _pipSubsText = string.Empty;
+            ApplyVideoRect();
+            UpdatePipSubs();
+            NativeLog("videoRect reset (navigation)");
+        }
+
         private void SetPipSubs(JsonObject msg)
         {
             _pipSubsText = msg.GetNamedString("text", string.Empty) ?? string.Empty;

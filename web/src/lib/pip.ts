@@ -146,6 +146,15 @@ setInterceptor((e) => {
   return true;
 });
 
+// A fresh page (side switch to Dash and back, reload) knows nothing about where the shell last put the video: shells up
+// to 1.0.103 keep a PiP rect across WebView navigations, so the next playback would open in the old corner window.
+// Put the video back to full screen behind the UI as soon as the shell says it supports rects.
+onNative((m) => {
+  if (m.type !== 'capabilities' || !pipSupported() || playback.peek()) return;
+  log('pip: reset video rect on boot');
+  sendRect(null);
+});
+
 // Signed out (or switched user) while PiP was up: the session must not resume under the next login.
 effect(() => {
   if (auth.value || !playback.peek()) return;
