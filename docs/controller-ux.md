@@ -70,7 +70,7 @@ Mainstream apps disagree on exact numbers; this is a deliberate blend of Apple T
 | LT / RT | **Hold** = analog rewind/fast-forward scrubbing, speed proportional to trigger depth; release = commit position | [REF] Kodi AnalogRewind/AnalogFastForward on triggers [6]; CBC Gem LT/RT [7] |
 | X | Audio & subtitle quick menu | [DECISION]; Kodi X=OSD [6] |
 | Y | Toggle subtitles on/off (last-used track) | [DECISION]; Kodi left-thumb=ShowSubtitles [6] |
-| Menu | Full overlay → settings panel (quality, speed, aspect, info) | [MS] Menu = options [2]; Kodi Start=Info [6] |
+| Menu | **Picture in picture** (playback shrinks into a corner window, the app stays usable; Menu on any page = back to full screen). Shells without PiP: show/hide the overlay | [DECISION, changed 2026-10 on user request] mirrors Menu = full screen while browsing |
 | View | Show media info (title, time-of-day, end time) | [DECISION] |
 | Skip-intro/credits prompt visible | **A activates Skip** (prompt holds focus while shown) | [DECISION]; Plex advertises "skipping … in just two clicks" [14] |
 

@@ -6,9 +6,11 @@
   position: fixed; right: var(--safe-x); bottom: var(--safe-y); z-index: 40; width: var(--pip-w);
   border-radius: var(--radius-m); background: rgb(14, 14, 20); border: 1px solid var(--glass-border);
   box-shadow: 0 1.2rem 3.6rem rgba(0, 0, 0, 0.6); cursor: pointer; overflow: hidden;
-  transform-origin: 100% 100%; animation: pipIn 320ms var(--ease) both;
+  animation: pipIn 260ms ease-out 180ms both;
 }
-@keyframes pipIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: none; } }
+/* The video itself shrinks from full screen onto .pip-box (shell / mock animation, 360 ms); the frame and caption
+   fade in as it lands. No scale here: the box must stay exactly where the video is heading. */
+@keyframes pipIn { from { opacity: 0; } to { opacity: 1; } }
 html.reduce-motion .pip-win { animation: none; }
 
 .pip-box { position: relative; aspect-ratio: 16 / 9; background: #000; border-radius: var(--radius-m) var(--radius-m) 0 0; display: flex; align-items: center; justify-content: center; }
@@ -51,3 +53,21 @@ html.mode-mobile .pip-close { width: 30px; height: 30px; }
 
 /* Player bottom bar: PiP button next to the info (i) button. */
 .pip-btn { width: 2.8rem !important; height: 2.8rem; border-radius: 50%; }
+
+/* Browser mock: the PiP subtitle line over the raised #mock-video (lib/bridge.ts; native draws its own TextBlock). */
+#mock-pip-subs {
+  position: fixed; z-index: 3; pointer-events: none; display: none; box-sizing: border-box;
+  align-items: flex-end; justify-content: center; padding: 0 5%; text-align: center;
+}
+#mock-pip-subs span {
+  font-weight: 600; line-height: 1.3; color: #fff; white-space: pre-line; padding: 0.08em 0.35em 0.12em;
+  background: rgba(0, 0, 0, 0.65); border-radius: 0.18em; box-decoration-break: clone; -webkit-box-decoration-break: clone;
+}
+
+/* Older shells (no pipSubs): the subtitle line covers the title area of the caption strip (same size), up to 2 lines. */
+.pip-subs-line {
+  position: absolute; left: 1.1rem; right: 1rem; top: 0.5rem; bottom: 0.6rem;
+  display: flex; align-items: center; justify-content: center; text-align: center; overflow: hidden;
+  font-size: 1rem; font-weight: 600; line-height: 1.2; white-space: pre-line;
+}
+html.mode-mobile .pip-subs-line { left: 10px; right: 6px; top: 4px; bottom: 6px; font-size: 12px; }

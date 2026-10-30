@@ -311,6 +311,9 @@ namespace XboxShell
                     case "setVideoRect":
                         SetVideoRect(msg);
                         break;
+                    case "setPipSubs":
+                        SetPipSubs(msg);
+                        break;
                     case "exit":
                         await StopAsync("exit", false);
                         await RestoreDisplayModeAsync("exit");
@@ -1639,6 +1642,7 @@ namespace XboxShell
 
             caps["hdrDisplay"] = JsonValue.CreateBooleanValue(hdrDisplay);
             caps["pip"] = JsonValue.CreateBooleanValue(true); // setVideoRect (VideoRect.cs)
+            caps["pipSubs"] = JsonValue.CreateBooleanValue(true); // setPipSubs + setVideoRect anim (VideoRect.cs)
 
             var video = new SortedSet<string>();
             var audio = new SortedSet<string>();

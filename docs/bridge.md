@@ -26,7 +26,8 @@ When `window.chrome?.webview` is absent (a desktop browser during development), 
 | `exit` | — | close the app |
 | `switchSide` | `side` (`media`/`dash`) | native navigates the single WebView2 to that side's resolved URL (stops playback first). Dash unreachable → `sideUnavailable`, stays put |
 | `setStartSide` | `side` (`media`/`dash`) | persisted in LocalSettings `startSide`, used at the next launch |
-| `setVideoRect` | `rect: {x, y, w, h} \| null`, `vw`, `vh`, `radius?` | picture-in-picture: put the video in that box (page CSS px; `vw`/`vh` = the page viewport) **above** the WebView; `null` = full window behind it. Native replies `videoRect`. Only when capabilities has `pip: true`. See "Picture in picture" below. |
+| `setVideoRect` | `rect: {x, y, w, h} \| null`, `vw`, `vh`, `radius?`, `anim?` | picture-in-picture: put the video in that box (page CSS px; `vw`/`vh` = the page viewport) **above** the WebView; `null` = full window behind it. Native replies `videoRect`. Only when capabilities has `pip: true`. See "Picture in picture" below. |
+| `setPipSubs` | `text` (plain, `\n` between lines; `''` = none) | subtitle line drawn over the PiP video (the web layer's subtitles are under it). Only with `pipSubs: true`. |
 
 ## native → web
 
@@ -43,7 +44,7 @@ When `window.chrome?.webview` is absent (a desktop browser during development), 
 | `videoRect` | `rect` (as sent, or `null`) | ack for `setVideoRect` |
 | `sideUnavailable` | `side` (`dash`) | the requested side's page server is unreachable (switch, or start side = dash at launch: sent right after `capabilities`) |
 
-Subtitles are rendered by the **web** layer (Jellyfin WebVTT delivery, synced to `time` events). Native does not render subtitles.
+Subtitles are rendered by the **web** layer (Jellyfin WebVTT delivery, synced to `time` events). Native does not render subtitles, except the plain-text line it draws over the PiP window (`setPipSubs`).
 
 Device-side policy (native): system Media Foundation by default (keeps E-AC3/Atmos passthrough and the
 HW HEVC/AV1 decoders); FFmpegInteropX only when the audio codec is TrueHD/DTS* or the container/codec combo
@@ -131,7 +132,16 @@ video can't show through a transparent hole; instead the shell moves the video *
 - Display mode: entering PiP does **not** restore the TV's default refresh rate (an HDMI mode switch blanks the
   screen for seconds and would interrupt the video). With Match frame rate the browsing UI can run at the film's
   23.976 Hz while PiP is up (menus feel less smooth); leaving the player restores it as usual (`stop {restore:'now'}`).
-- Browser mock: the same message positions `#mock-video` (inline styles, `pointer-events:none`) and emits `videoRect`.
+- `anim: true` (capability `pipSubs`): ease from where the video is drawn now to the new rect (~360 ms, render
+  transform + clip corner animation). Entering, the web first sends the whole page as the rect (raised at full size,
+  no anim), waits for the ack, swaps the page under it, then sends the window rect with `anim` = the picture shrinks
+  into the corner. Leaving with `rect:null, anim:true` grows it back above the WebView, then drops it behind.
+- `setPipSubs {text}` (capability `pipSubs`): native draws the current cue (white on a dark box, bottom of the
+  window) above the raised video; hidden while full screen or while the video is moving.
+- Shells with `pip` but without `pipSubs`: the web steps `setVideoRect` itself (one eased rect per frame, ~360 ms)
+  and shows the subtitle line in the PiP window's caption strip, under the picture.
+- Browser mock: the same messages position `#mock-video` (inline styles, `pointer-events:none`; `anim` = a FLIP
+  transform animation), draw `#mock-pip-subs`, and emit `videoRect`.
 
 ## Sides: media + dash in one app (shell 0.1.5x+ / store 1.0.x, docs/store-release.md)
 

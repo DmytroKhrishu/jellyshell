@@ -10,7 +10,7 @@ import { onNative, send, isNative } from '../lib/bridge';
 import { pushHandler, onRelease, ActionEvent, Action } from '../lib/input';
 import { focusEl, current, move } from '../lib/focus';
 import { replacePlayer, replaceTop } from '../lib/router';
-import { pip, pipSupported, enterPip, closePlayback, pipFullScreen } from '../lib/pip';
+import { pip, pipSupported, enterPip, closePlayback, pipFullScreen, raiseVideoFull, playback, sendVideoRect, cueText } from '../lib/pip';
 import { PipWindow } from '../components/PipWindow';
 import '../styles/pip.css';
 import {
@@ -873,6 +873,9 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
           if (!e.repeat) toggleSubs();
           return true;
         case 'menu':
+          // Menu = picture in picture (and Menu anywhere in PiP = back to full screen, lib/pip.ts). No PiP: overlay toggle.
+          if (!e.repeat) pipSupported() && !err ? goPip() : c.ui ? setUi(false) : showUi();
+          return true;
         case 'view':
           if (!e.repeat) c.ui ? setUi(false) : showUi();
           return true;
@@ -1005,13 +1008,23 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   }, [ui, !!sess, state === 'Playing' || state === 'Paused']);
 
   // ---------- picture-in-picture (lib/pip.ts) ----------
+  const pipBusy = useRef(false);
   const goPip = () => {
-    if (!pipSupported() || err) return;
+    if (!pipSupported() || err || pipBusy.current || pipRef.current) return;
     cancelPreview();
     setShowInfo(false);
     setShowEps(false);
     log('pip: enter', { item: it?.Name, posS: Math.round(r.current.pos / 1000) });
-    enterPip(); // pops the player route: the app gets focus back where playback started
+    // Raise the video above the UI at full size first (lib/pip.ts raiseVideoFull), then swap the page under it;
+    // PipWindow's first rect shrinks it into the corner.
+    const key = playback.peek()?.key;
+    pipBusy.current = true;
+    void raiseVideoFull().then(() => {
+      pipBusy.current = false;
+      if (playback.peek()?.key !== key || pip.peek()) return;
+      enterPip(); // pops the player route: the app gets focus back where playback started
+      if (!pip.peek()) sendVideoRect(null); // didn't happen (route changed meanwhile): put the video back behind the UI
+    });
   };
   const wasPip = useRef(inPip);
   useEffect(() => {
@@ -1041,6 +1054,8 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   const remaining = Math.max(0, dur - shown);
   const endsAtLabel = endsAt(remaining);
   const subsNow = useMemo(() => cuesAt(cues, pos - subOff), [cues, Math.floor(pos / 100), subOff]);
+  // PiP: the same cues as plain text (the shell draws them over the raised video).
+  const pipSubs = useMemo(() => (inPip ? subsNow.map((c) => cueText(c.text)).filter(Boolean).join('\n') : ''), [inPip, subsNow]);
   const loading = !err && (state === 'Opening' || state === 'Buffering' || !sess);
   const title = it ? (it.Type === 'Episode' ? it.SeriesName : it.Name) : '';
   const subtitle = it?.Type === 'Episode' ? `${episodeLabel(it)} · ${it.Name}` : it?.ProductionYear ? String(it.ProductionYear) : '';
@@ -1059,7 +1074,7 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   if (inPip) {
     return (
       <div class="player-pip">
-        <PipWindow title={title || it?.Name || ''} subtitle={subtitle} pct={pct} loading={loading || starting} paused={state === 'Paused'} onFull={() => pipFullScreen('click')} onClose={exit} />
+        <PipWindow title={title || it?.Name || ''} subtitle={subtitle} subs={pipSubs} pct={pct} loading={loading || starting} paused={state === 'Paused'} onFull={() => pipFullScreen('click')} onClose={exit} />
       </div>
     );
   }
@@ -1208,6 +1223,11 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
                 {(sess?.subIndex ?? -1) >= 0 && <span class="sub-dot" />}
               </div>
             )}
+            {pipSupported() && !err && (
+              <div class="btn icon focusable pip-btn" tabIndex={-1} data-fkey="p-pip" title="Picture in picture (Menu)" onClick={goPip}>
+                <Icon name="pip" />
+              </div>
+            )}
             {toneMapped && picture.value?.canEdit && (
               <div class="btn icon focusable" tabIndex={-1} data-fkey="p-picture" title="Picture (HDR brightness)" onClick={openPicture}>
                 <Icon name="brightness" />
@@ -1228,11 +1248,6 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
             <div class={'btn icon focusable info-btn' + (showInfo ? ' on' : '')} tabIndex={-1} title="Playback info" onClick={() => setShowInfo((v) => !v)}>
               <Icon name="info" />
             </div>
-            {pipSupported() && !err && (
-              <div class="btn icon focusable pip-btn" tabIndex={-1} data-fkey="p-pip" title="Picture in picture" onClick={goPip}>
-                <Icon name="pip" />
-              </div>
-            )}
             {!isNative && !isAndroidTV && (document.fullscreenEnabled || (document as any).webkitFullscreenEnabled) && (
               <div class="btn icon focusable fs-btn" tabIndex={-1} title="Fullscreen (F)" onClick={() => toggleFullscreen().then(() => setFsTick((n) => n + 1))}>
                 <Icon name={document.fullscreenElement ? 'fullscreenExit' : 'fullscreen'} />

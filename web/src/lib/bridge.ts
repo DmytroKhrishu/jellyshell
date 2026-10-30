@@ -13,6 +13,8 @@ export interface Capabilities {
   maxAudioChannels: number;
   /** Shell understands `setVideoRect` (picture-in-picture). Shells before it omit the flag: no PiP button. */
   pip?: boolean;
+  /** Shell draws PiP subtitles (`setPipSubs`) and animates `setVideoRect {anim:true}`. */
+  pipSubs?: boolean;
 }
 
 export const DEFAULT_CAPS: Capabilities = {
@@ -90,7 +92,7 @@ function emit(m: NativeMsg) {
 }
 
 export function send(msg: { type: string; [k: string]: unknown }) {
-  if (msg.type !== 'seek') log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/api_key=[^&]+/i, 'api_key=<k>') } : msg);
+  if (msg.type !== 'seek' && msg.type !== 'setPipSubs' && !msg.step) log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/api_key=[^&]+/i, 'api_key=<k>') } : msg);
   if (wv) wv.postMessage(msg);
   else mock.handle(msg);
 }
@@ -112,6 +114,28 @@ if (wv) {
 // ---------------- mock bridge (desktop browser) ----------------
 const mock = (() => {
   let video: HTMLVideoElement | null = null;
+  // PiP (setVideoRect / setPipSubs): the subtitle line over the raised video, like the native TextBlock.
+  let pipRect: { x: number; y: number; w: number; h: number } | null = null;
+  let pipAnim: Animation | null = null;
+  let pipSubsText = '';
+  let pipSubsEl: HTMLDivElement | null = null;
+  const pipSubsDraw = () => {
+    const show = !!pipRect && !pipAnim && !!pipSubsText.trim();
+    if (!show) {
+      if (pipSubsEl) pipSubsEl.style.display = 'none';
+      return;
+    }
+    if (!pipSubsEl) {
+      pipSubsEl = document.createElement('div');
+      pipSubsEl.id = 'mock-pip-subs';
+      pipSubsEl.appendChild(document.createElement('span'));
+      document.body.appendChild(pipSubsEl);
+    }
+    const r = pipRect!;
+    const fs = Math.max(11, r.h * 0.075);
+    Object.assign(pipSubsEl.style, { display: 'flex', left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', paddingBottom: r.h * 0.05 + 'px', fontSize: fs + 'px' });
+    pipSubsEl.firstElementChild!.textContent = pipSubsText;
+  };
   let hls: Hls | null = null;
   let timer: number | undefined;
   const state = (s: string) => emit({ type: 'playbackState', state: s, videoWidth: video?.videoWidth, videoHeight: video?.videoHeight });
@@ -170,7 +194,7 @@ const mock = (() => {
     handle(msg: any) {
       switch (msg.type) {
         case 'hello':
-          setTimeout(() => emit({ type: 'capabilities', ...DEFAULT_CAPS, deviceForm: 'Desktop (mock)', hdrDisplay: false, pip: true }), 50);
+          setTimeout(() => emit({ type: 'capabilities', ...DEFAULT_CAPS, deviceForm: 'Desktop (mock)', hdrDisplay: false, pip: true, pipSubs: true }), 50);
           break;
         case 'play': {
           stop();
@@ -217,19 +241,48 @@ const mock = (() => {
         case 'setVideoRect': {
           // Same contract as native (docs/bridge.md "Picture in picture"): rect in page CSS px, raised above the UI,
           // never hit-testable (clicks fall through to the PiP window under it); null = full screen behind the UI.
+          // anim: FLIP from where the video is drawn now to the new box (transform only, on the compositor).
           const v = (video ?? document.getElementById('mock-video')) as HTMLVideoElement | null;
           const r = msg.rect as { x: number; y: number; w: number; h: number } | null;
+          pipRect = r;
           if (v) {
+            pipAnim?.cancel();
+            pipAnim = null;
+            const from = v.getBoundingClientRect();
             const st = v.style;
             if (r) {
               Object.assign(st, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', right: 'auto', bottom: 'auto', zIndex: '2', pointerEvents: 'none', borderRadius: (msg.radius || 0) + 'px' });
             } else {
               for (const k of ['left', 'top', 'width', 'height', 'right', 'bottom', 'zIndex', 'pointerEvents', 'borderRadius'] as const) st[k] = '';
             }
+            const to = v.getBoundingClientRect();
+            if (msg.anim && from.width > 0 && to.width > 0 && !document.documentElement.classList.contains('reduce-motion')) {
+              const a = v.animate(
+                [
+                  { transformOrigin: '0 0', transform: `translate(${from.left - to.left}px, ${from.top - to.top}px) scale(${from.width / to.width}, ${from.height / to.height})` },
+                  { transformOrigin: '0 0', transform: 'none' },
+                ],
+                { duration: 360, easing: 'cubic-bezier(0.33, 1, 0.68, 1)' },
+              );
+              pipAnim = a;
+              // Leaving: stay above the UI while it grows, then drop behind.
+              if (!r) st.zIndex = '2';
+              a.onfinish = a.oncancel = () => {
+                if (pipAnim !== a) return;
+                pipAnim = null;
+                if (!pipRect) st.zIndex = '';
+                pipSubsDraw();
+              };
+            }
           }
+          pipSubsDraw();
           setTimeout(() => emit({ type: 'videoRect', rect: r ?? null }), 0);
           break;
         }
+        case 'setPipSubs':
+          pipSubsText = String(msg.text ?? '');
+          pipSubsDraw();
+          break;
         case 'setAudioBoost':
           boost(video ?? (document.getElementById('mock-video') as HTMLVideoElement), msg);
           break;
