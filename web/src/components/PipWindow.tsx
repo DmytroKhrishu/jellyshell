@@ -1,10 +1,10 @@
 // Picture-in-picture window (lib/pip.ts has the rules). The Player renders this instead of its overlay while `pip` is on.
-// Layout: a 16:9 video box + a caption strip under it (title, progress, close). The real video sits exactly on the box:
+// Layout: a 16:9 video box, the progress line right under it, then a caption strip (title, close). The real video sits exactly on the box:
 // on Xbox the native MediaPlayerElement is raised above the WebView to the box's rect, in browsers #mock-video is moved
 // there (lib/bridge.ts mock). Anything drawn INSIDE the box is covered by the video, so the controls live in the strip.
 // Not focusable: the D-pad keeps moving through the app; Menu (global intercept) or a click/tap = full screen.
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
-import { playback, pip, pipSubsSupported, sendPipSubs, sendVideoRect } from '../lib/pip';
+import { playback, pip, pipLeaving, pipSubsSupported, sendPipSubs, sendVideoRect, videoBehind } from '../lib/pip';
 import { dialog } from './Dialog';
 import { Icon } from './icons';
 import '../styles/pip.css';
@@ -17,28 +17,34 @@ export function PipWindow(p: { title: string; subtitle: string; subs: string; pc
   const covered = !!dialog.value;
   const coveredRef = useRef(covered);
   coveredRef.current = covered;
+  const leaving = pipLeaving.value;
+  const animated = pipSubsSupported(); // the shell animates the move (else it jumps: no delayed fade-in either)
 
-  // Send the box's LAYOUT rect (offsets ignore CSS transforms, so the video heads for the final spot).
-  // First send animates (the video, raised full size by Player's goPip, shrinks onto the box); later ones (resize,
-  // dialog covered/uncovered) jump. Unmount back to full screen of the SAME session grows it back; closing doesn't.
+  // Send the box's LAYOUT rect (offsets ignore CSS transforms). The video arrives raised at full size (Player goPip ->
+  // raiseVideoFull); the first rect is sent once the browsing page under it has painted and moves it into the box
+  // (animated where the shell can). Later sends (resize, dialog covered/uncovered) jump; repeats are dropped in lib/pip.ts.
   const resend = useRef<() => void>(() => {});
   useLayoutEffect(() => {
-    let anim = true;
     const key0 = playback.peek()?.key;
-    const send = () => {
+    let started = false;
+    const send = (anim = false) => {
       const w = win.current;
       const b = box.current;
-      if (!w || !b) return;
+      if (!w || !b || pipLeaving.peek()) return;
       if (coveredRef.current) return sendVideoRect(null);
       const r = { left: w.offsetLeft + w.clientLeft + b.offsetLeft, top: w.offsetTop + w.clientTop + b.offsetTop, width: b.offsetWidth, height: b.offsetHeight };
       const radius = parseFloat(getComputedStyle(b).borderTopLeftRadius) || 0;
       sendVideoRect({ getBoundingClientRect: () => r } as unknown as HTMLElement, radius, anim);
-      anim = false;
     };
-    send();
-    resend.current = send;
-    let raf = 0;
-    const kick = () => void (raf ||= requestAnimationFrame(() => ((raf = 0), send())));
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        started = true;
+        send(true);
+      });
+    });
+    resend.current = () => started && send();
+    const kick = () => void (started && (raf ||= requestAnimationFrame(() => ((raf = 0), send()))));
     addEventListener('resize', kick, { passive: true });
     const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(kick) : null;
     if (ro && win.current) ro.observe(win.current);
@@ -47,8 +53,10 @@ export function PipWindow(p: { title: string; subtitle: string; subs: string; pc
       ro?.disconnect();
       cancelAnimationFrame(raf);
       sendPipSubs('');
+      // Next episode in PiP (lib/router.ts replacePlayer): a new Player's PipWindow takes over the same box; leave it.
+      if (pip.peek() && playback.peek()) return;
       const s = playback.peek();
-      sendVideoRect(null, 0, !pip.peek() && !!s && s.key === key0);
+      videoBehind(!!s && s.key === key0);
     };
   }, []);
   const first = useRef(true);
@@ -60,26 +68,32 @@ export function PipWindow(p: { title: string; subtitle: string; subs: string; pc
   // Subtitles: the video covers this part of the page, so the shell draws the line over it (lib/pip.ts sendPipSubs).
   useEffect(() => sendPipSubs(p.subs), [p.subs]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.classList.add('pip');
     return () => document.documentElement.classList.remove('pip');
   }, []);
 
-  const stripSubs = !!p.subs && !pipSubsSupported();
   return (
-    <div class="pip-win" ref={win} onClick={p.onFull} title="Full screen" role="button" aria-label={'Picture in picture: ' + p.title}>
+    <div
+      class={'pip-win' + (animated ? ' pip-anim' : '') + (leaving ? ' leaving' : '')}
+      ref={win}
+      onClick={p.onFull}
+      title="Full screen"
+      role="button"
+      aria-label={'Picture in picture: ' + p.title}
+    >
       <div class={'pip-box' + (covered ? ' covered' : '')} ref={box}>
         {p.loading && <div class="spinner" />}
       </div>
+      <div class="pip-prog">
+        <i style={{ transform: `scaleX(${p.pct})` }} />
+      </div>
       <div class="pip-cap">
-        {/* Shells that can't draw subtitles over the video: the current line covers the title, under the picture.
-            Title stays laid out (hidden) so the window never changes size (that would move the video). */}
-        <div class="pip-text" style={stripSubs ? { visibility: 'hidden' } : undefined}>
+        <div class="pip-text">
           <div class="pip-title">{p.title}</div>
-          <div class="pip-sub">{p.subtitle || '\u00a0'}</div>
+          {p.subtitle && <div class="pip-sub">{p.subtitle}</div>}
         </div>
-        {stripSubs && <div class="pip-subs-line">{p.subs}</div>}
-        <div class="pip-hint" aria-hidden="true" style={stripSubs ? { visibility: 'hidden' } : undefined}>
+        <div class="pip-hint" aria-hidden="true">
           <Icon name="menuBtn" />
           Full screen
         </div>
@@ -94,9 +108,6 @@ export function PipWindow(p: { title: string; subtitle: string; subs: string; pc
         >
           <Icon name="close" stroke={2.4} />
         </button>
-        <div class="pip-prog">
-          <i style={{ transform: `scaleX(${p.pct})` }} />
-        </div>
       </div>
     </div>
   );

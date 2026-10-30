@@ -92,7 +92,7 @@ function emit(m: NativeMsg) {
 }
 
 export function send(msg: { type: string; [k: string]: unknown }) {
-  if (msg.type !== 'seek' && msg.type !== 'setPipSubs' && !msg.step) log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/api_key=[^&]+/i, 'api_key=<k>') } : msg);
+  if (msg.type !== 'seek' && msg.type !== 'setPipSubs') log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/api_key=[^&]+/i, 'api_key=<k>') } : msg);
   if (wv) wv.postMessage(msg);
   else mock.handle(msg);
 }
@@ -251,7 +251,7 @@ const mock = (() => {
             const from = v.getBoundingClientRect();
             const st = v.style;
             if (r) {
-              Object.assign(st, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', right: 'auto', bottom: 'auto', zIndex: '2', pointerEvents: 'none', borderRadius: (msg.radius || 0) + 'px' });
+              Object.assign(st, { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px', right: 'auto', bottom: 'auto', zIndex: '2', pointerEvents: 'none', borderRadius: `${msg.radius || 0}px ${msg.radius || 0}px 0 0` }); // top corners: the progress line sits under it
             } else {
               for (const k of ['left', 'top', 'width', 'height', 'right', 'bottom', 'zIndex', 'pointerEvents', 'borderRadius'] as const) st[k] = '';
             }

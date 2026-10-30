@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { openPicker, dialog, Opt } from '../components/Dialog';
 import {
   Item, item as getItem, cachedItem, fmtClock, TICKS_PER_MS, episodeLabel, nextEpisodeAfter, MediaStream, backdropUrl,
@@ -110,7 +110,8 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
   // html.starting -> opaque page keeps the backdrop + "Starting…" until the first frame;
   // html.playing  -> transparent page so the native video shows through.
   // PiP: neither (the pages stay opaque and usable; the video is moved into the PiP window instead).
-  useEffect(() => {
+  // Layout effect: the page must switch in the same frame as the PiP window mounts (lib/pip.ts "Transitions").
+  useLayoutEffect(() => {
     const h = document.documentElement.classList;
     h.toggle('starting', starting && !inPip);
     h.toggle('playing', !starting && !inPip);
@@ -1223,11 +1224,6 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
                 {(sess?.subIndex ?? -1) >= 0 && <span class="sub-dot" />}
               </div>
             )}
-            {pipSupported() && !err && (
-              <div class="btn icon focusable pip-btn" tabIndex={-1} data-fkey="p-pip" title="Picture in picture (Menu)" onClick={goPip}>
-                <Icon name="pip" />
-              </div>
-            )}
             {toneMapped && picture.value?.canEdit && (
               <div class="btn icon focusable" tabIndex={-1} data-fkey="p-picture" title="Picture (HDR brightness)" onClick={openPicture}>
                 <Icon name="brightness" />
@@ -1248,6 +1244,11 @@ export function Player({ id, startMs: startOverride, fromStart }: { id: string; 
             <div class={'btn icon focusable info-btn' + (showInfo ? ' on' : '')} tabIndex={-1} title="Playback info" onClick={() => setShowInfo((v) => !v)}>
               <Icon name="info" />
             </div>
+            {pipSupported() && !err && (
+              <div class="btn icon focusable pip-btn" tabIndex={-1} data-fkey="p-pip" title="Picture in picture (Menu)" onClick={goPip}>
+                <Icon name="pip" />
+              </div>
+            )}
             {!isNative && !isAndroidTV && (document.fullscreenEnabled || (document as any).webkitFullscreenEnabled) && (
               <div class="btn icon focusable fs-btn" tabIndex={-1} title="Fullscreen (F)" onClick={() => toggleFullscreen().then(() => setFsTick((n) => n + 1))}>
                 <Icon name={document.fullscreenElement ? 'fullscreenExit' : 'fullscreen'} />

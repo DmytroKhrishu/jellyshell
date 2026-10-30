@@ -122,24 +122,28 @@ The web app can shrink the playing video into a floating window while the rest o
 (web/src/lib/pip.ts, components/PipWindow.tsx). In PiP the pages are opaque again (no `html.playing`), so the
 video can't show through a transparent hole; instead the shell moves the video **on top**:
 
-- `setVideoRect {rect:{x,y,w,h}, vw, vh, radius}`: native sizes/positions the `MediaPlayerElement` to the rect
-  (scaled from the page's `vw`×`vh` CSS px to the XAML root), raises it above the WebView (`Canvas.ZIndex`),
-  keeps it out of input (`IsHitTestVisible=false`, `IsTabStop=false`: controller focus and keys stay in the WebView)
-  and clips its corners to `radius` (composition rounded-rectangle clip). Sent again on page resize.
+- `setVideoRect {rect:{x,y,w,h}, vw, vh, radius}`: native fits the `MediaPlayerElement` into the rect (scaled from
+  the page's `vw`×`vh` CSS px to the XAML root), raises it above the WebView (`Canvas.ZIndex`), keeps it out of input
+  (`IsHitTestVisible=false`, `IsTabStop=false`: controller focus and keys stay in the WebView) and rounds its top
+  corners to `radius` (composition clip; the web's progress line sits right under it). Sent again on page resize.
+  Shells with `pipSubs`: the element keeps its full-window layout and is fitted by a render transform (the video
+  surface is never resized); older shells resize the element to the rect (and round all four corners).
 - `setVideoRect {rect:null}`: back to full window, behind the WebView (the normal player).
+- `anim: true` (shells with `pipSubs`): ease from where the video is now to the new rect (`PipAnimMs` 360 ms, transform +
+  clip radius, all on the compositor). Older shells ignore it and jump. The web never steps rects itself: each message
+  resizes the video on older shells, so stepping stutters.
+- The page under the video only switches while the video covers the whole screen above it (web/src/lib/pip.ts
+  "Transitions"): enter = rect = whole page (raised, no anim), ack, page switches, window rect with `anim`; leave =
+  whole page with `anim` (grows over the browsing page), page switches to the player, then `rect:null` once the
+  transparent player page has painted.
 - The rect persists across `play`/`stop` (next episode while in PiP keeps the window) until changed.
 - Ack: `videoRect {rect}`. Capability flag `pip: true` in `capabilities`; shells without it get no PiP button.
+- `setPipSubs {text}` (capability `pipSubs`): native draws the current cue (white on a dark box, bottom of the window)
+  above the raised video; hidden while full size or moving. Older shells: no subtitles in PiP (nothing the page draws
+  can be above the raised video).
 - Display mode: entering PiP does **not** restore the TV's default refresh rate (an HDMI mode switch blanks the
   screen for seconds and would interrupt the video). With Match frame rate the browsing UI can run at the film's
   23.976 Hz while PiP is up (menus feel less smooth); leaving the player restores it as usual (`stop {restore:'now'}`).
-- `anim: true` (capability `pipSubs`): ease from where the video is drawn now to the new rect (~360 ms, render
-  transform + clip corner animation). Entering, the web first sends the whole page as the rect (raised at full size,
-  no anim), waits for the ack, swaps the page under it, then sends the window rect with `anim` = the picture shrinks
-  into the corner. Leaving with `rect:null, anim:true` grows it back above the WebView, then drops it behind.
-- `setPipSubs {text}` (capability `pipSubs`): native draws the current cue (white on a dark box, bottom of the
-  window) above the raised video; hidden while full screen or while the video is moving.
-- Shells with `pip` but without `pipSubs`: the web steps `setVideoRect` itself (one eased rect per frame, ~360 ms)
-  and shows the subtitle line in the PiP window's caption strip, under the picture.
 - Browser mock: the same messages position `#mock-video` (inline styles, `pointer-events:none`; `anim` = a FLIP
   transform animation), draw `#mock-pip-subs`, and emit `videoRect`.
 
