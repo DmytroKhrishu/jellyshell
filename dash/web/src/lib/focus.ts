@@ -217,14 +217,35 @@ function offsetWithin(el: HTMLElement, ancestor: HTMLElement) {
   return { x, y };
 }
 
+/**
+ * Max horizontal shift of a row track: the LAST card's right edge + the track's right padding (TV-safe area) + room for
+ * the focus scale must fit inside the viewport. track.scrollWidth drops the flex container's end padding, which left
+ * the last card cut by the screen edge. (Same as the media side's lib/focus.ts.)
+ */
+function hMax(h: HTMLElement, track: HTMLElement) {
+  const last = track.lastElementChild as HTMLElement | null;
+  if (!last) return 0;
+  // Rect centre is unaffected by the card's own focus scale and both rects share the track's translate.
+  const lr = last.getBoundingClientRect();
+  const tr = track.getBoundingClientRect();
+  const right = lr.left + lr.width / 2 - tr.left + last.offsetWidth / 2;
+  const cs = getComputedStyle(track);
+  const padR = parseFloat(cs.paddingRight) || 0;
+  const grow = last.offsetWidth * 0.05; // focused card scales up ~1.08 around its centre
+  // Where the untransformed track starts inside the viewport's padding box: 0 for .row-track (its negative margin cancels
+  // the viewport padding), > 0 for scrollers whose track sits inside padding (episodes-panel season pills).
+  const tx = cs.transform && cs.transform !== 'none' ? new DOMMatrixReadOnly(cs.transform).m41 : 0;
+  const start = tr.left - tx - h.getBoundingClientRect().left - h.clientLeft;
+  return Math.max(0, Math.ceil(start + right + padR + grow - h.clientWidth));
+}
+
 export function reveal(el: HTMLElement, instant?: boolean) {
   const h = el.closest<HTMLElement>('[data-hscroll]');
   if (h) {
     const track = h.firstElementChild as HTMLElement;
     const { x } = offsetWithin(el, track);
     const pad = parseFloat(getComputedStyle(track).paddingLeft) || 0;
-    const max = Math.max(0, track.scrollWidth - h.clientWidth);
-    setTx(track, Math.min(max, Math.max(0, x - pad)), instant);
+    setTx(track, Math.min(hMax(h, track), Math.max(0, x - pad)), instant);
   }
   const v = el.closest<HTMLElement>('[data-vscroll]');
   if (v) {
@@ -259,7 +280,7 @@ export function wheelScroll(target: Element, dx: number, dy: number, shift: bool
     const h = target.closest<HTMLElement>('[data-hscroll]');
     if (h) {
       const t = h.firstElementChild as HTMLElement;
-      const max = Math.max(0, t.scrollWidth - h.clientWidth);
+      const max = hMax(h, t);
       setTx(t, Math.min(max, Math.max(0, parseFloat(t.dataset.tx || '0') + d)), true);
       return true;
     }

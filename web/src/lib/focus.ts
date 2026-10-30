@@ -232,10 +232,16 @@ function hMax(h: HTMLElement, track: HTMLElement) {
   if (!last) return 0;
   // Rect centre is unaffected by the card's own focus scale and both rects share the track's translate.
   const lr = last.getBoundingClientRect();
-  const right = lr.left + lr.width / 2 - track.getBoundingClientRect().left + last.offsetWidth / 2;
-  const padR = parseFloat(getComputedStyle(track).paddingRight) || 0;
+  const tr = track.getBoundingClientRect();
+  const right = lr.left + lr.width / 2 - tr.left + last.offsetWidth / 2;
+  const cs = getComputedStyle(track);
+  const padR = parseFloat(cs.paddingRight) || 0;
   const grow = last.offsetWidth * 0.05; // focused card scales up ~1.08 around its centre
-  return Math.max(0, Math.ceil(right + padR + grow - h.clientWidth));
+  // Where the untransformed track starts inside the viewport's padding box: 0 for .row-track (its negative margin cancels
+  // the viewport padding), > 0 for scrollers whose track sits inside padding (episodes-panel season pills).
+  const tx = cs.transform && cs.transform !== 'none' ? new DOMMatrixReadOnly(cs.transform).m41 : 0;
+  const start = tr.left - tx - h.getBoundingClientRect().left - h.clientLeft;
+  return Math.max(0, Math.ceil(start + right + padR + grow - h.clientWidth));
 }
 
 export function reveal(el: HTMLElement, instant?: boolean) {
