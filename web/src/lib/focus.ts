@@ -159,8 +159,20 @@ export function move(dir: Dir, quiet = false): boolean {
   if (g && g !== curGroup && !g.contains(cur) && !(g.dataset.group === 'spatial')) {
     const m = memory.get(g);
     if (m && m.isConnected && visible(m) && m !== cur) best = m;
+    else best = rowEntry(best, cur, dir) ?? best;
   }
   return focusEl(best);
+}
+
+/** Up/Down from outside any row (search field, buttons, season pills) into a row never visited: start at the row's
+ *  marked card (the series page's up-next episode), else its first card, not whichever card sits under the source. */
+function rowEntry(best: HTMLElement, cur: HTMLElement, dir: Dir): HTMLElement | null {
+  if (dir !== 'up' && dir !== 'down') return null;
+  const row = best.closest<HTMLElement>('[data-hscroll]');
+  if (!row || cur.closest('[data-hscroll]')) return null;
+  const pref = row.querySelector<HTMLElement>('[data-autofocus].focusable');
+  if (pref && visible(pref)) return pref;
+  return focusables(row)[0] ?? null;
 }
 
 function overlapGap(a1: number, a2: number, b1: number, b2: number) {

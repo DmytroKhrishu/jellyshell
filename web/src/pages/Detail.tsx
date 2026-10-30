@@ -277,15 +277,16 @@ function Extras({ it }: { it: Item }) {
 
 function SeriesBody({ series, active, initialSeason, rev, onChanged }: { series: Item; active: boolean; initialSeason?: string; rev: number; onChanged: () => void }) {
   const { data: ss } = useAsync(() => seasons(series.Id), [series.Id, rev]);
-  const { data: nu } = useAsync(() => seriesNextUp(series.Id), [series.Id, rev]);
+  const { data: nu, error: nuErr } = useAsync(() => seriesNextUp(series.Id), [series.Id, rev]);
   const [seasonId, setSeasonId] = useState<string | undefined>(initialSeason);
   const next = nu?.Items[0] ?? null;
 
+  // Wait for Next Up too: picking as soon as the seasons arrive chose Season 1, and the up-next episode was never in the row.
   useEffect(() => {
-    if (seasonId || !ss) return;
+    if (seasonId || !ss || (!nu && !nuErr)) return;
     const fromNext = next?.SeasonId && ss.Items.find((s) => s.Id === next.SeasonId);
     setSeasonId((fromNext || ss.Items.find((s) => (s.IndexNumber ?? 0) > 0) || ss.Items[0])?.Id);
-  }, [ss, nu]);
+  }, [ss, nu, nuErr]);
 
   const { data: eps } = useAsync(() => (seasonId ? episodes(series.Id, seasonId) : Promise.resolve(null)), [seasonId, rev]);
 
