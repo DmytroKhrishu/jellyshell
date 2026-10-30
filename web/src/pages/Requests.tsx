@@ -645,20 +645,20 @@ export function RequestSheet(p: {
 }
 
 // ---------------- advanced request options ----------------
-interface ReqPick {
+export interface ReqPick {
   serverId: number;
   profileId?: number;
   rootFolder?: string;
   minimumAvailability?: MinAvail;
 }
-const defaultPick = (s: ServerOpts): ReqPick => ({
+export const defaultPick = (s: ServerOpts): ReqPick => ({
   serverId: s.id,
   profileId: s.activeProfileId,
   rootFolder: s.activeDirectory,
   minimumAvailability: s.minimumAvailability,
 });
 /** Only what differs from the Seerr defaults goes out, so a straight-through request is the same body as before. */
-function advancedBody(server: ServerOpts | null, pick: ReqPick | null, type: 'movie' | 'tv'): Partial<RequestBody> {
+export function advancedBody(server: ServerOpts | null, pick: ReqPick | null, type: 'movie' | 'tv'): Partial<RequestBody> {
   if (!server || !pick) return {};
   const def = defaultPick(server);
   const out: Partial<RequestBody> = {};
@@ -693,7 +693,7 @@ function OptRow<T extends string | number>(p: { label: string; id: string; value
   );
 }
 
-function RequestOptions(p: { type: 'movie' | 'tv'; servers: ServerOpts[]; server: ServerOpts; pick: ReqPick; onPick: (x: ReqPick) => void }) {
+export function RequestOptions(p: { type: 'movie' | 'tv'; servers: ServerOpts[]; server: ServerOpts; pick: ReqPick; onPick: (x: ReqPick) => void }) {
   const s = p.server;
   return (
     <div class="rq-opts">

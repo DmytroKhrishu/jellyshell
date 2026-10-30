@@ -1,0 +1,8 @@
+/* "Request more seasons" modal on the series page (components/RequestSeasons.tsx). Base look = .rq-confirm. */
+.rqm { max-width: 76rem; }
+.rqm .rq-confirm-text .muted { max-width: 62rem; }
+.rqm-seasons { padding: 0.4rem 0.8rem 0; margin-bottom: 0.4rem; max-height: 40vh; }
+.rqm .rq-err { padding: 0 0.8rem; }
+.rqm .btn.disabled:focus { opacity: 0.7; }
+html.mode-mobile .rqm-seasons { max-height: none; }
+html.mode-mobile .rqm .rq-opts { padding-left: 0.8rem; padding-right: 0.8rem; }

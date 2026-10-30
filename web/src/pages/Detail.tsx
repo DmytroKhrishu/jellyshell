@@ -22,6 +22,8 @@ import { dataRev } from '../lib/datasync';
 import { Icon } from '../components/icons';
 import { PersonCard } from '../components/PersonCard';
 import { MoreLikeThis, SameWorldRow, useTmdbExtras } from '../components/FranchiseRows';
+import { RequestSeasonsButton } from '../components/RequestSeasons';
+import type { ComponentChildren } from 'preact';
 import '../styles/seasons.css';
 
 export function Detail({ id, seasonId, active }: { id: string; seasonId?: string; active: boolean }) {
@@ -114,7 +116,7 @@ function MetaLine({ it }: { it: Item }) {
 }
 
 /** Movie / episode header with action buttons. */
-function Head({ it, active, onChanged, playTarget, seasonId }: { it: Item; active: boolean; onChanged: () => void; playTarget?: Item | null; seasonId?: string }) {
+function Head({ it, active, onChanged, playTarget, seasonId, more }: { it: Item; active: boolean; onChanged: () => void; playTarget?: Item | null; seasonId?: string; more?: ComponentChildren }) {
   const target = playTarget ?? it;
   const pos = target.UserData?.PlaybackPositionTicks ?? 0;
   const resumable = pos > 0 && !target.UserData?.Played;
@@ -240,6 +242,7 @@ function Head({ it, active, onChanged, playTarget, seasonId }: { it: Item; activ
             Go to Series
           </div>
         )}
+        {more}
       </div>
       {resumable && !!target.RunTimeTicks && (
         <div class="resume-note">
@@ -351,7 +354,7 @@ function SeriesBody({ series, active, initialSeason, rev, onChanged }: { series:
 
   return (
     <>
-      <Head it={series} active={active} onChanged={onChanged} playTarget={nextFull ?? next ?? null} seasonId={seasonId} />
+      <Head it={series} active={active} onChanged={onChanged} playTarget={nextFull ?? next ?? null} seasonId={seasonId} more={<RequestSeasonsButton series={series} jfSeasons={ss?.Items} />} />
       {ss && ss.Items.length > 0 && (
         <div class="season-tabs" data-group="seasons" data-scrollunit>
           {ss.Items.map((s) => {
