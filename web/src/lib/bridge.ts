@@ -92,7 +92,7 @@ function emit(m: NativeMsg) {
 }
 
 export function send(msg: { type: string; [k: string]: unknown }) {
-  if (msg.type !== 'seek' && msg.type !== 'setPipSubs') log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/api_key=[^&]+/i, 'api_key=<k>') } : msg);
+  if (msg.type !== 'seek' && msg.type !== 'setPipSubs') log('-> native', msg.type === 'play' ? { ...msg, url: String(msg.url).replace(/(api_key|ApiKey)=[^&]+/, '$1=<k>') } : msg);
   if (wv) wv.postMessage(msg);
   else mock.handle(msg);
 }

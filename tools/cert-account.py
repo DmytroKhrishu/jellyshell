@@ -11,7 +11,7 @@ only the Movies + Shows libraries. A strong random password is written to ~/.con
 (mode 600) and printed once, for the Partner Center "Notes for certification" separate note.
 
 Config (env or the repo-root .env, see tools/toolenv.py):
-  JELLYFIN_URL (default http://127.0.0.1:8096), JELLYFIN_API_KEY or JELLYFIN_API_KEY_FILE (admin key, sent as X-Emby-Token),
+  JELLYFIN_URL (default http://127.0.0.1:8096), JELLYFIN_API_KEY or JELLYFIN_API_KEY_FILE (admin key, sent in the Authorization header),
   JELLYFIN_PUBLIC_URL (the server URL written into the credential file for the tester), CERT_ACCOUNT_NAME (default cert-tester).
 """
 import argparse
@@ -49,7 +49,7 @@ LIBRARY_TYPES = ('movies', 'tvshows')
 def api(method, path, body=None):
     data = None if body is None else json.dumps(body).encode()
     req = urllib.request.Request(JF + path, data=data, method=method,
-                                 headers={'X-Emby-Token': KEY, 'Content-Type': 'application/json'})
+                                 headers={'Authorization': f'MediaBrowser Token="{KEY}"', 'Content-Type': 'application/json'})
     try:
         with urllib.request.urlopen(req, timeout=15) as r:
             raw = r.read()
@@ -152,12 +152,12 @@ def cmd_create(name):
     # prove the credentials work
     auth = urllib.request.Request(JF + '/Users/AuthenticateByName', method='POST',
                                   data=json.dumps({'Username': name, 'Pw': pw}).encode(),
-                                  headers={'Content-Type': 'application/json', 'X-Emby-Authorization':
+                                  headers={'Content-Type': 'application/json', 'Authorization':
                                            'MediaBrowser Client="cert-account", Device="cert-account", DeviceId="cert-account", Version="1"'})
     with urllib.request.urlopen(auth, timeout=15) as r:
         tok = json.load(r)['AccessToken']
     urllib.request.urlopen(urllib.request.Request(JF + '/Sessions/Logout', method='POST', data=b'',
-                                                  headers={'X-Emby-Token': tok}), timeout=15)
+                                                  headers={'Authorization': f'MediaBrowser Token="{tok}"'}), timeout=15)
     print(f'created {name} ({user["Id"]}); login verified; credentials in {f} (600)')
     print(f'password (for the separate certification note): {pw}')
     return cmd_status(name)

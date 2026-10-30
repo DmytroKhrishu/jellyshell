@@ -63,6 +63,14 @@ SEERR_GET = [
 ]
 
 
+def jf_auth(token):
+    """Jellyfin auth header for a user token or API key. Jellyfin 12 turned the legacy X-Emby-Token header and api_key= query
+    off by default (EnableLegacyAuthorization); `Authorization: MediaBrowser Token=` works on 10.9+ and 12.x."""
+    if not token or not re.fullmatch(r'[A-Za-z0-9._~-]{8,256}', token):
+        raise Upstream(401, 'invalid Jellyfin token')
+    return {'Authorization': f'MediaBrowser Token="{token}"'}
+
+
 class Upstream(Exception):
     def __init__(self, code, msg):
         super().__init__(msg)
@@ -116,11 +124,11 @@ def whoami(token, claimed_user=''):
         if hit and hit[0] > now:
             return hit[1]
     try:
-        me = _req(JF + '/Users/Me', headers={'X-Emby-Token': token})
+        me = _req(JF + '/Users/Me', headers=jf_auth(token))
     except Upstream as e:
         if e.code in (401, 403) or not re.fullmatch(r'[0-9a-fA-F-]{32,36}', claimed_user or ''):
             raise Upstream(401, 'invalid Jellyfin token') from None
-        me = _req(f'{JF}/Users/{claimed_user}', headers={'X-Emby-Token': token})
+        me = _req(f'{JF}/Users/{claimed_user}', headers=jf_auth(token))
     if not me or 'Id' not in me:
         raise Upstream(401, 'invalid Jellyfin token')
     jf_id = me['Id'].replace('-', '').lower()
@@ -569,7 +577,7 @@ def library_index(token):
         if hit and hit[0] > now:
             return hit[1]
     d = _req(f'{JF}/Items?userId={uid}&Recursive=true&IncludeItemTypes=Series,Movie&Fields=ProviderIds&EnableImages=false&EnableUserData=false',
-             headers={'X-Emby-Token': tok}, timeout=20)
+             headers=jf_auth(tok), timeout=20)
     idx = {}
     for it in d.get('Items', []):
         kind = 'tv' if it.get('Type') == 'Series' else 'movie'
@@ -589,7 +597,7 @@ def _season_id(token, series_id, number):
     if not hit or hit[0] <= now:
         tok, uid = _jf_user_token(token)
         try:
-            d = _req(f'{JF}/Shows/{series_id}/Seasons?userId={uid}', headers={'X-Emby-Token': tok})
+            d = _req(f'{JF}/Shows/{series_id}/Seasons?userId={uid}', headers=jf_auth(tok))
         except Upstream:
             return None
         hit = (now + 300, {s.get('IndexNumber'): s['Id'] for s in d.get('Items', []) if s.get('IndexNumber') is not None})

@@ -8,7 +8,7 @@ import re
 import threading
 import time
 
-from arr_proxy import JF, Upstream, _req
+from arr_proxy import JF, Upstream, _req, jf_auth
 
 # ---------------- who is calling (Jellyfin policy, independent of Seerr) ----------------
 _pol = {}  # token|claimed -> (expires, info)
@@ -30,11 +30,11 @@ def jf_policy(token, claimed=''):
         if hit and hit[0] > now:
             return hit[1]
     try:
-        me = _req(JF + '/Users/Me', headers={'X-Emby-Token': token})
+        me = _req(JF + '/Users/Me', headers=jf_auth(token))
     except Upstream as e:
         if e.code in (401, 403) or not re.fullmatch(r'[0-9a-fA-F-]{32,36}', claimed or ''):
             raise Upstream(401, 'invalid Jellyfin token') from None
-        me = _req(f'{JF}/Users/{claimed}', headers={'X-Emby-Token': token})
+        me = _req(f'{JF}/Users/{claimed}', headers=jf_auth(token))
     if not isinstance(me, dict) or 'Id' not in me:
         raise Upstream(401, 'invalid Jellyfin token')
     p = me.get('Policy') or {}

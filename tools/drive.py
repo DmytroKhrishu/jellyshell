@@ -51,13 +51,13 @@ def jf_cfg():
 
 def jf_play(item_id, variant, overrides):
     c = jf_cfg()
-    req = urllib.request.Request(f"{JF_LOCAL}/Users/{c['userId']}/Items/{item_id}", headers={'X-Emby-Token': c['key']})
+    req = urllib.request.Request(f"{JF_LOCAL}/Users/{c['userId']}/Items/{item_id}", headers={'Authorization': f'MediaBrowser Token="{c["key"]}"'})
     it = json.load(urllib.request.urlopen(req, timeout=10))
     ms = it['MediaSources'][0]
     v = next(s for s in ms['MediaStreams'] if s['Type'] == 'Video')
     a = next((s for s in ms['MediaStreams'] if s['Type'] == 'Audio'), {})
     base = f"{JF_LAN}/Videos/{item_id}"
-    common = f"mediaSourceId={ms['Id']}&api_key={c['key']}&playSessionId=drive{int(time.time())}&deviceId=jellyshell-drive"
+    common = f"mediaSourceId={ms['Id']}&ApiKey={c['key']}&playSessionId=drive{int(time.time())}&deviceId=jellyshell-drive"
     container, acodec = ms['Container'], a.get('Codec', '')
     vc = v.get('Codec', '')
     if variant == 'direct':

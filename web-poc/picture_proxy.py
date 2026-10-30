@@ -14,7 +14,7 @@ import json
 import threading
 
 import access
-from arr_proxy import JF, Upstream, _req
+from arr_proxy import JF, Upstream, _req, jf_auth
 from subs_proxy import KEYS
 
 B_MIN, B_MAX = 0.0, 64.0
@@ -25,7 +25,7 @@ _lock = threading.Lock()
 def _jf(path, body=None):
     if not KEYS.get('jf'):
         raise Upstream(503, 'JELLYFIN_API_KEY not configured')
-    return _req(JF + path, method='POST' if body is not None else 'GET', body=body, headers={'X-Emby-Token': KEYS['jf']})
+    return _req(JF + path, method='POST' if body is not None else 'GET', body=body, headers=jf_auth(KEYS['jf']))
 
 
 def _state(can_edit):

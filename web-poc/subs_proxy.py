@@ -31,7 +31,7 @@ from pathlib import Path
 
 import arr_proxy
 import config
-from arr_proxy import Upstream, _req, whoami, KEYS, SONARR, RADARR, JF, require
+from arr_proxy import Upstream, _req, jf_auth, whoami, KEYS, SONARR, RADARR, JF, require
 
 BAZARR = config.BAZARR_URL + '/api' if config.BAZARR_URL else ''
 LEDGER = config.DATA_DIR / 'subs_created.json'  # files downloaded through JellyShell
@@ -56,7 +56,7 @@ def jfa(path, method='GET', timeout=15):
     """Jellyfin with the server's API key (item lookup, refresh)."""
     if not KEYS.get('jf'):
         raise Upstream(503, 'JELLYFIN_API_KEY not configured')
-    return _req(JF + path, method=method, headers={'X-Emby-Token': KEYS['jf']}, timeout=timeout)
+    return _req(JF + path, method=method, headers=jf_auth(KEYS['jf']), timeout=timeout)
 
 
 def q(v):

@@ -177,14 +177,14 @@ export function streamUrl(it: Item, src: MediaSource, playSessionId: string) {
       mediaSourceId: src.Id,
       deviceId: DEVICE_ID,
       PlaySessionId: playSessionId,
-      api_key: a.token,
+      ApiKey: a.token, // ApiKey= (10.9+); api_key= is legacy auth, off by default since Jellyfin 12
     });
     if (src.ETag) q.set('Tag', src.ETag);
     return { url: `${server}/Videos/${it.Id}/stream?${q}`, method: 'DirectPlay' as const };
   }
   if (src.TranscodingUrl) {
     let u = server + src.TranscodingUrl;
-    if (!/api_key=|ApiKey=/i.test(u)) u += (u.includes('?') ? '&' : '?') + 'api_key=' + a.token;
+    if (!/[?&](api_key|ApiKey)=/.test(u)) u += (u.includes('?') ? '&' : '?') + 'ApiKey=' + a.token;
     return { url: u, method: (/\bVideoCodec=copy|videocodec=copy/i.test(u) ? 'DirectStream' : 'Transcode') as Session['playMethod'] };
   }
   throw new Error('No playable stream: server allows neither direct play nor transcoding for this item.');
@@ -292,9 +292,9 @@ export function subtitleUrl(s: Session, sub: MediaStream) {
     const u = sub.DeliveryUrl.startsWith('http') ? sub.DeliveryUrl : server + sub.DeliveryUrl;
     // Ask for WebVTT regardless of what the profile matched.
     const vtt = u.replace(/\/Stream\.\w+(\?|$)/i, '/Stream.vtt$1');
-    return vtt.includes('api_key') || vtt.includes('ApiKey') ? vtt : vtt + (vtt.includes('?') ? '&' : '?') + 'api_key=' + a.token;
+    return /[?&](api_key|ApiKey)=/.test(vtt) ? vtt : vtt + (vtt.includes('?') ? '&' : '?') + 'ApiKey=' + a.token;
   }
-  return `${server}/Videos/${s.item.Id}/${s.source.Id}/Subtitles/${sub.Index}/0/Stream.vtt?api_key=${a.token}`;
+  return `${server}/Videos/${s.item.Id}/${s.source.Id}/Subtitles/${sub.Index}/0/Stream.vtt?ApiKey=${a.token}`;
 }
 
 export async function loadVtt(url: string): Promise<Cue[]> {
