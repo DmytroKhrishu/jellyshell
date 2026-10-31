@@ -520,7 +520,7 @@ export function RequestSheet(p: {
     p.type === 'movie' ? 'Request' : allSelected ? (a === 'none' ? 'Request all seasons' : 'Request remaining seasons') : `Request ${nSel} season${nSel === 1 ? '' : 's'}`;
 
   return (
-    <div class={'rq-sheet-wrap' + (p.visible ? '' : ' hidden')}>
+    <div class={'rq-sheet-wrap' + (p.visible ? '' : ' hidden')} data-backdrop>
       <div class="rq-sheet" data-scope ref={ref}>
         <div class="rq-poster">
           <Img src={tmdbImg(base?.posterPath, 'w500')} alt={title} eager />
@@ -617,7 +617,7 @@ export function RequestSheet(p: {
         </div>
       </div>
       {confirm && (
-        <div class="dialog-wrap rq-confirm-wrap">
+        <div class="dialog-wrap rq-confirm-wrap" data-backdrop>
           <div class={'dialog rq-confirm' + (server ? ' with-opts' : '')} data-scope>
             <div class="dialog-col">
               <h3>{server ? 'Request options' : 'Confirm request'}</h3>

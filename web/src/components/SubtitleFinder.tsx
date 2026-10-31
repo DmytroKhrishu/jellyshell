@@ -161,7 +161,7 @@ function SubtitleFinder({ req }: { req: FinderReq }) {
   const f = res?.file;
   const head = it.Type === 'Episode' ? `${it.SeriesName} · ${episodeLabel(it)}` : it.Name;
   return (
-    <div class="sf-wrap" onClick={(e) => e.target === e.currentTarget && !busy && (ctl.current?.abort(), closeFinder())}>
+    <div class="sf-wrap" data-backdrop>
       <aside class="sf" data-scope ref={ref}>
         <div class="sf-head">
           <div class="sf-title">Find subtitles</div>

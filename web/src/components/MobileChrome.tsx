@@ -1,5 +1,5 @@
 // Mobile chrome (html.mode-mobile only): iOS-style bottom tab bar + "More" sheet, a floating Back button on pushed
-// pages, browser/Android back gesture -> app back, swipe on the Home hero, tap outside a sheet = close.
+// pages, browser/Android back gesture -> app back, swipe on the Home hero (tap outside a sheet = close is app-wide: lib/backdrop.ts).
 // Everything here is additive: TV and desktop never render it.
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { TABS, tab, stack, switchTab, top, pop, visibleTabs } from '../lib/router';
@@ -36,7 +36,6 @@ export function MobileChrome() {
   const depth = stack.value.length;
   useHistorySync(mobile);
   useHeroSwipe(mobile);
-  useSheetDismiss(mobile);
   useScrollVar(mobile);
   useEffect(() => setMore(false), [tab.value, depth]);
   // Back (Android back gesture / system Back in the APK, Escape) closes the More sheet before anything else.
@@ -76,7 +75,7 @@ export function MobileChrome() {
         </nav>
       )}
       {more && (
-        <div class="m-sheet-wrap" onClick={(e) => e.target === e.currentTarget && setMore(false)}>
+        <div class="m-sheet-wrap" data-backdrop>
           <div class="m-sheet" role="menu">
             <div class="m-grabber" />
             {moreTabs().map((t) => (
@@ -159,22 +158,6 @@ function useHeroSwipe(on: boolean) {
       document.removeEventListener('touchstart', down);
       document.removeEventListener('touchend', up);
     };
-  }, [on]);
-}
-
-/** Bottom sheets: tapping the dimmed area above a sheet closes it (same path as B / Escape). */
-function useSheetDismiss(on: boolean) {
-  useEffect(() => {
-    if (!on) return;
-    const click = (e: MouseEvent) => {
-      const t = e.target as HTMLElement;
-      if (t?.classList?.contains('dialog-wrap') || t?.classList?.contains('rq-sheet-wrap')) {
-        e.stopPropagation();
-        dispatch('back', 'key');
-      }
-    };
-    document.addEventListener('click', click, true);
-    return () => document.removeEventListener('click', click, true);
   }, [on]);
 }
 

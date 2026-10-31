@@ -83,7 +83,7 @@ function Editor({ side }: { side: UiSide }) {
 
   const title = side === 'media' ? 'JellyShell server' : 'Dash server';
   return (
-    <div class="uis-wrap">
+    <div class="uis-wrap" data-backdrop>
       <div class="uis login-panel" data-scope ref={ref}>
         <h2>
           <Icon name={side === 'media' ? 'server' : 'dash'} /> {title}

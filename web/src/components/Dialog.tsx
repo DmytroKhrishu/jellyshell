@@ -70,7 +70,7 @@ export function Dialog() {
   }, [d]);
   if (!d) return null;
   return (
-    <div class="dialog-wrap">
+    <div class="dialog-wrap" data-backdrop>
       <div class="dialog" data-scope ref={ref}>
         {d.columns.map((c, ci) => (
           <div class="dialog-col" key={ci} data-group={'dlg' + ci}>

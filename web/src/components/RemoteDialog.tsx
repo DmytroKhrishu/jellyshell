@@ -91,7 +91,7 @@ function Pair() {
   const justPaired = remoteEvent.value?.kind === 'paired' && now - remoteEvent.value.at < 6000 ? remoteEvent.value : null;
 
   return (
-    <div class="rp-wrap">
+    <div class="rp-wrap" data-backdrop>
       <div class="rp login-panel" data-scope ref={ref}>
         <h2>
           <Icon name="phone" /> Phone remote

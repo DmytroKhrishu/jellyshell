@@ -86,7 +86,7 @@ export function EpisodesPanel({ ep, onPick, onClose }: { ep: Item; onPick: (e: I
 
   const seasonName = ss?.find((s) => s.Id === seasonId)?.Name ?? '';
   return (
-    <div class="epp-wrap" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div class="epp-wrap" data-backdrop>
       <aside class="epp" data-scope ref={ref}>
         <div class="epp-head">
           <div class="epp-series">{ep.SeriesName}</div>

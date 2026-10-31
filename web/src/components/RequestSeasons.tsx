@@ -185,7 +185,7 @@ function RequestSeasonsModal(p: { series: Item; tmdb: number; d: SDetail; rows: 
 
   const nLib = p.rows.filter((r) => r.st !== 'none').length;
   return (
-    <div class="dialog-wrap rq-confirm-wrap">
+    <div class="dialog-wrap rq-confirm-wrap" data-backdrop>
       <div class={'dialog rq-confirm rqm' + (server ? ' with-opts' : '')} data-scope ref={ref}>
         <div class="dialog-col">
           <h3>
