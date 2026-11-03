@@ -20,5 +20,8 @@ compose.override.yaml
 node_modules
 web/dist/
 dash/web/dist/
+# npm test output (playwright)
+test-results/
+playwright-report/
 # page-server / dash runtime files (JELLYSHELL_DATA_DIR / DASH_DATA_DIR defaults)
 data/

@@ -9,6 +9,9 @@
 !.env.example
 .deploy
 data
+tests
+test-results
+playwright-report
 shell
 android
 docs

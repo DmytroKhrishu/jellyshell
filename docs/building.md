@@ -8,6 +8,8 @@ address: a build either gets optional defaults from your CI settings, or asks on
 
 ### Build on GitHub Actions (a fork, no Windows machine needed)
 `.github/workflows/build.yml` runs on every push to `shell/**` on `main`, or by hand (Actions → build-shell → Run workflow).
+Its first job runs `npm test` ([testing.md](testing.md)) on every push that touches `shell/`, `web/`, `dash/web/`, `dash/server/` or `tests/`; the
+Windows build only runs after the tests pass, and only when `shell/` or the workflow changed (or on a manual run).
 It builds `web/dist`, bundles it into the package as the offline UI, and uploads the artifact `jellyshell-x64`
 (`.msix` plus the `Dependencies/x64/*.appx` the console needs).
 
