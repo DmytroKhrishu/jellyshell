@@ -548,7 +548,12 @@ def _profile_langs(bz_series):
     prof = next((p for p in bz('/system/languages/profiles') if p.get('profileId') == pid), None)
     if not prof:
         return []
-    names = {lang['code3']: lang for lang in bz('/system/languages')}
+    # Profile items name the language by code2 ('en', Bazarr 1.6) or code3 ('eng', older): accept both.
+    names = {}
+    for lang in bz('/system/languages'):
+        for k in ('code2', 'code3'):
+            if lang.get(k):
+                names.setdefault(lang[k], lang)
     out = []
     for item in prof.get('items') or []:
         if str(item.get('forced')) == 'True':

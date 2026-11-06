@@ -64,19 +64,27 @@ function columns(series: Item, seasonId: string | undefined, plan: SeriesPlan): 
     return cols;
   }
   const missingSub = (n: number, of: number) => (n ? `${n} of ${of} missing` : 'All have subtitles');
+  // Every season (Specials last), then Whole series. The season open on the page starts focused (.sel).
+  const ordered = [...plan.seasons.filter((s) => s.season > 0), ...plan.seasons.filter((s) => s.season === 0)];
   cols.push({
     title: `${name} subtitles`,
     icon: 'findSubs',
     note: `Only episodes without ${name} subtitles. Existing files are never replaced. Takes ~10–60 s per episode; you can keep browsing.`,
     options: [
-      ...(season
-        ? [{ label: season.season === 0 ? 'Specials' : `Season ${season.season}`, value: 'season', sub: missingSub(season.missing, season.episodes), action: true, icon: 'downloads' as const }]
-        : []),
-      { label: 'Whole series', value: 'all', sub: missingSub(plan.missing, plan.episodes), action: true, icon: 'downloads' as const },
+      ...ordered.map((s) => ({
+        label: s.season === 0 ? 'Specials' : `Season ${s.season}`,
+        value: 'season-' + s.season,
+        sub: missingSub(s.missing, s.episodes),
+        selected: s === season,
+        action: true,
+        icon: 'downloads' as const,
+      })),
+      { label: 'Whole series', value: 'all', sub: missingSub(plan.missing, plan.episodes), selected: !season, action: true, icon: 'downloads' as const },
     ],
     onPick: (v) => {
-      const s = v === 'season' ? season!.season : null;
-      const n = v === 'season' ? season!.missing : plan.missing;
+      const picked = v.startsWith('season-') ? plan.seasons.find((s) => 'season-' + s.season === v) : undefined;
+      const s = picked ? picked.season : null;
+      const n = picked ? picked.missing : plan.missing;
       if (!n) return showToast(`Every episode already has ${name} subtitles`);
       startSeriesSubs(series.Id, s, plan.language)
         .then((j) => {
