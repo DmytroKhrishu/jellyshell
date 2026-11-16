@@ -25,7 +25,7 @@ import { dashAvailable, switchSide, viewCameFromTextInput } from './lib/sides';
 import { needsServerSetup, ServerSetup } from './components/ServerSetup';
 import './styles/sides.css';
 import { pushHandler, startRemote } from './lib/input';
-import { current, focusEl, move, page, restoreIn, focusFirst } from './lib/focus';
+import { current, focusEl, move, page, restoreIn, focusFirst, remember } from './lib/focus';
 import { itemFromEl, contextMenu, playItem, isPlayTile } from './lib/actions';
 import { log } from './lib/log';
 import { send } from './lib/bridge';
@@ -40,8 +40,17 @@ installLongPress();
 export { dataRev };
 
 function TabBar({ hidden }: { hidden: boolean }) {
+  // Up into the bar lands on the SELECTED tab, not the pill nearest the card (its onFocus would switch tabs).
+  useEffect(() => {
+    requestAnimationFrame(() => {
+      const el = document.querySelector<HTMLElement>(`.tabbar [data-fkey="tab-${tab.value}"]`);
+      if (el && current() !== el) remember(el);
+    });
+  }, [tab.value, visibleTabs.value]);
+  // inert while away (a page is pushed): otherwise Up from the page's top falls back to the invisible bar and the
+  // pill's onFocus -> switchTab() wipes the stack (back to Home from a movie / actor page).
   return (
-    <nav class={'tabbar' + (hidden ? ' away' : '')} data-lastresort data-group="tabbar">
+    <nav class={'tabbar' + (hidden ? ' away' : '')} data-lastresort data-group="tabbar" inert={hidden}>
       <div class="tabbar-inner">
         {visibleTabs.value.map((t) => (
           <div

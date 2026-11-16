@@ -4,6 +4,7 @@
 //  - rowEntry(): Down from a field/pills into a never-visited row lands on its marked or first card, not mid-list (28e3545)
 //  - hMax(): the last card of a row stops inside the TV-safe edge (scrollWidth drops the end padding; dash until 728109e),
 //    and a track that sits inside its viewport's padding (episodes-panel season pills, 728109e)
+//  - visible(): an [inert] tab bar (hidden over a pushed page) is not a [data-lastresort] fallback (Up reset Detail -> Home)
 import { test, expect, type Page } from '@playwright/test';
 import { COPIES, ONLY, load, press, focus, focused, rect, row, type Copy } from './harness';
 
@@ -74,6 +75,14 @@ for (const copy of COPIES) {
         expect(await focused(page)).toBe('play');
         await press(page, 'up');
         expect(await focused(page)).toMatch(/^tab-/);
+      });
+
+      test('an [inert] tab bar (slid away over a pushed page) is never a fallback: Up at the top stays put', async ({ page }) => {
+        await load(page, copy, seriesPage());
+        await page.evaluate(() => document.querySelector('.tabbar')!.setAttribute('inert', ''));
+        await focus(page, 'play');
+        expect(await press(page, 'up')).toBe(false);
+        expect(await focused(page), 'Up from the top of a pushed page must not focus a hidden tab (its onFocus wipes the stack)').toBe('play');
       });
 
       test('[data-block] keeps focus in a short row instead of jumping diagonally into the row above', async ({ page }) => {

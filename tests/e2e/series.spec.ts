@@ -2,6 +2,7 @@
 //  - b3f7500: Down from the header landed on Season 1 instead of the up-next season (remember(pill) in SeriesBody)
 //  - 28e3545: the season was picked before Next Up arrived (Season 1), and Down into the episode row landed mid-list
 //  - hMax: the last episode card stopped under the screen edge
+//  - Up past the top of a pushed page fell back to the hidden tab bar, whose onFocus switchTab() wiped the stack (-> Home)
 import { test, expect, type Page } from '@playwright/test';
 import { WEB, JF, lockNetwork, pageServer } from './net';
 import { mockJellyfin, authInit, SERIES, UP_NEXT } from './mock-jellyfin';
@@ -45,4 +46,14 @@ test('series page: Next Up answering first gives the same result', async ({ page
   await frames(page);
   await page.keyboard.press('ArrowDown');
   await expect.poll(() => focusedKey(page)).toBe('season-S3');
+});
+
+test('series page: Up past the top stays on the page (hidden tab bar is inert, no reset to Home)', async ({ page }) => {
+  await openSeries(page, 0);
+  await frames(page);
+  for (let i = 0; i < 4; i++) await page.keyboard.press('ArrowUp');
+  await frames(page);
+  expect(await focusedKey(page), 'focus stays on the header').toBe('act-play');
+  await expect(page.locator('[data-fkey="act-play"]'), 'the series page is still on screen').toBeVisible();
+  await expect(page.locator('.tabbar')).toHaveClass(/away/);
 });

@@ -15,6 +15,8 @@ export const focusedKey = signal<string | null>(null);
 
 function visible(el: HTMLElement) {
   if (!el.isConnected) return false;
+  // inert = the browser refuses focus there (e.g. the tab bar slid away over a pushed page); spatial nav must skip it too
+  if (el.closest('[inert]')) return false;
   if ((el as any).checkVisibility) return (el as any).checkVisibility({ visibilityProperty: true });
   return el.offsetParent !== null;
 }
